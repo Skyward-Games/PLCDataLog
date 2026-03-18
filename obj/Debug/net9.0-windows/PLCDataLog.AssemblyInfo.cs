@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("PLCDataLog")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e8245c949d71b0f047ed696adecf4b46f40205b1")]
 [assembly: System.Reflection.AssemblyProductAttribute("PLCDataLog")]
 [assembly: System.Reflection.AssemblyTitleAttribute("PLCDataLog")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
