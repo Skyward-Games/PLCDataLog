@@ -1,0 +1,642 @@
+﻿<Window x:Class="PLCDataLog.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:PLCDataLog"
+        mc:Ignorable="d"
+        Title="{DynamicResource AppTitle}" Height="780" Width="1280"
+        MinWidth="1080" MinHeight="680"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="CanResize"
+        WindowStyle="SingleBorderWindow"
+        Background="{DynamicResource BackgroundColor}"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="Auto">
+
+    <Window.Resources>
+        <!-- Sidebar navigation button (icon + text) -->
+        <Style x:Key="SidebarNavButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="12" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="10" Background="{TemplateBinding Background}" Padding="10">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <ContentPresenter Grid.ColumnSpan="2" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#0F000000" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#16000000" />
+                            </Trigger>
+                            <Trigger Property="Tag" Value="Selected">
+                                <Setter TargetName="Bd" Property="Background" Value="#142563EB" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="HeaderTitleStyle" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe UI Variable Display, Segoe UI" />
+            <Setter Property="FontSize" Value="20" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+        </Style>
+
+        <Style x:Key="SmallLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+
+        <Style x:Key="ValueText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style x:Key="ExpanderHeaderButtonStyle" TargetType="ToggleButton">
+            <Setter Property="Background" Value="{DynamicResource ButtonSecondaryBackground}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource ButtonSecondaryBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="{DynamicResource ButtonSecondaryForeground}" />
+            <Setter Property="Padding" Value="18,12" />
+            <Setter Property="MinHeight" Value="46" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="10">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <ContentPresenter VerticalAlignment="Center" Margin="12,0,10,0" />
+                                <TextBlock x:Name="ChevronIcon"
+                                           Grid.Column="1"
+                                           FontFamily="Segoe Fluent Icons"
+                                           Text="&#xE70D;"
+                                           Margin="0,0,14,0"
+                                           VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextSecondary}" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ButtonSecondaryBackgroundHover}" />
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource PrimaryColor}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ButtonSecondaryBackgroundPressed}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource PrimaryColor}" />
+                                <Setter TargetName="ChevronIcon" Property="Text" Value="&#xE70E;" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SettingsExpanderStyle" TargetType="Expander">
+            <Setter Property="Margin" Value="0,0,0,12" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="Normal" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Expander">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <ToggleButton x:Name="HeaderSite"
+                                          Style="{StaticResource ExpanderHeaderButtonStyle}"
+                                          Content="{TemplateBinding Header}"
+                                          IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}"
+                                          HorizontalAlignment="Stretch" />
+                            <Border x:Name="ExpandSite" Grid.Row="1" Visibility="Collapsed">
+                                <ContentPresenter Margin="0,8,0,0" />
+                            </Border>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsExpanded" Value="True">
+                                <Setter TargetName="ExpandSite" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="252" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- Sidebar -->
+        <Border Grid.Column="0" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource BorderSoft}" BorderThickness="0,0,1,0">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Top" Margin="18,20,18,14">
+                    <TextBlock FontSize="14" FontWeight="SemiBold" Text="{DynamicResource AppTitle}" />
+                </StackPanel>
+
+                <StackPanel Margin="10,0,10,0">
+                    <Button x:Name="DashboardNavButton" Style="{StaticResource SidebarNavButtonStyle}" Click="DashboardNavButton_Click" Tag="Selected" Margin="0,0,0,6">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock FontFamily="Segoe Fluent Icons" FontSize="18" Text="&#xE80F;" Margin="0,0,12,0" Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock FontSize="14" FontWeight="SemiBold" Text="{DynamicResource MenuDashboard}" Foreground="{DynamicResource TextPrimary}" />
+                        </StackPanel>
+                    </Button>
+
+                    <Button x:Name="SettingsNavButton" Style="{StaticResource SidebarNavButtonStyle}" Click="SettingsNavButton_Click">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock FontFamily="Segoe Fluent Icons" FontSize="18" Text="&#xE713;" Margin="0,0,12,0" Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock FontSize="14" FontWeight="SemiBold" Text="{DynamicResource MenuSettings}" Foreground="{DynamicResource TextPrimary}" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <StackPanel DockPanel.Dock="Bottom" Margin="16,12,16,18">
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Content Area -->
+        <Grid Grid.Column="1" Background="{DynamicResource BackgroundColor}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="64" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <Border Grid.Row="0" Background="{DynamicResource BackgroundColor}" BorderBrush="{DynamicResource BorderSoft}" BorderThickness="0,0,0,1">
+                <Grid Margin="24,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock x:Name="PageTitleTextBlock" VerticalAlignment="Center" Style="{StaticResource HeaderTitleStyle}" Text="{DynamicResource MenuDashboard}" />
+
+                    <!-- mini status clock (dashboard only; updated via code-behind) -->
+                    <Border Grid.Column="1" CornerRadius="12" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource BorderSoft}" BorderThickness="1" Padding="14,7" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock FontFamily="Segoe Fluent Icons" FontSize="14" Text="&#xE823;" Foreground="{DynamicResource TextSecondary}" Margin="0,0,8,0" VerticalAlignment="Center" />
+                            <TextBlock x:Name="HeaderClockTextBlock" Style="{StaticResource ValueText}" Text="--:--" VerticalAlignment="Center" />
+                            <TextBlock Text=" · " Foreground="{DynamicResource TextSecondary}" Margin="6,0" VerticalAlignment="Center" />
+                            <TextBlock x:Name="HeaderTimeZoneTextBlock" Style="{StaticResource SmallLabel}" Text="Windows (Local)" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <!-- Views host -->
+            <Grid Grid.Row="1" Margin="24,20,24,16">
+
+                <!-- Dashboard -->
+                <ScrollViewer x:Name="DashboardPanel" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel>
+                        <!-- Card de Controle (Topo) -->
+                        <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                            <DockPanel LastChildFill="True">
+                                <StackPanel DockPanel.Dock="Top" Orientation="Vertical" VerticalAlignment="Center" Margin="0,0,0,14">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Ellipse x:Name="StatusIndicator" Width="10" Height="10" Fill="Gray" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                        <TextBlock FontSize="14" FontWeight="SemiBold" Text="Status da conexão" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="ConnectionStatusTextBlock" Margin="0,6,0,0" Foreground="{DynamicResource TextSecondary}" Text="Desconectado" />
+                                    <TextBlock x:Name="ConnectionInfoTextBlock" Margin="0,2,0,0" Foreground="{DynamicResource TextSecondary}" Text="Aguardando conexão com PLC" />
+                                </StackPanel>
+
+                                <WrapPanel Orientation="Horizontal" ItemHeight="Auto" ItemWidth="Auto" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,10">
+                                    <TextBlock VerticalAlignment="Center" Foreground="{DynamicResource TextSecondary}" Text="IP" Margin="0,0,8,0" />
+                                    <TextBox x:Name="PlcHostTextBox" Width="170" Text="127.0.0.1" ToolTip="Endereço IP do PLC na rede" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,10">
+                                    <TextBlock VerticalAlignment="Center" Foreground="{DynamicResource TextSecondary}" Text="Porta" Margin="0,0,8,0" />
+                                    <TextBox x:Name="PlcPortTextBox" Width="80" Text="502" ToolTip="Porta Modbus TCP (padrão 502)" />
+                                </StackPanel>
+
+                                <Button x:Name="StartButton" Tag="Primary" Width="124" Margin="0,0,10,10" VerticalAlignment="Center"
+                                        Content="{DynamicResource Start}" Click="StartButton_Click" ToolTip="Iniciar monitoramento" />
+
+                                <Button x:Name="StopButton" Width="124" Tag="Secondary" Margin="0,0,14,10" VerticalAlignment="Center"
+                                        Content="{DynamicResource Stop}" Click="StopButton_Click" IsEnabled="False" ToolTip="Parar monitoramento" />
+
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,14,10">
+                                    <TextBlock VerticalAlignment="Center" Foreground="{DynamicResource TextSecondary}" Text="{DynamicResource PollMs}" Margin="0,0,8,0" />
+                                    <TextBox x:Name="PollIntervalTextBox" Width="90" Text="500" ToolTip="Intervalo de leitura em milissegundos" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,10">
+                                    <TextBlock VerticalAlignment="Center" Foreground="{DynamicResource TextSecondary}" Text="{DynamicResource UnitId}" Margin="0,0,8,0" />
+                                    <TextBox x:Name="UnitIdTextBox" Width="70" Text="1" ToolTip="ID da unidade Modbus Server" />
+                                </StackPanel>
+                                </WrapPanel>
+                            </DockPanel>
+                        </Border>
+
+                        <!-- Conteúdo -->
+                        <StackPanel Margin="0,0,0,20">
+                            <Border Style="{StaticResource Card}" Padding="14" Margin="0,0,0,12">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel>
+                                        <TextBlock Text="Relógio / Automação" FontWeight="SemiBold" FontSize="13" />
+                                        <TextBlock Margin="0,4,0,0" Style="{StaticResource SmallLabel}" Text="Hora exibida no fuso selecionado nas configurações." />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Style="{StaticResource SmallLabel}" Text="Próximo envio:" VerticalAlignment="Center" />
+                                        <TextBlock x:Name="NextSendTextBlock" Margin="8,0,0,0" Style="{StaticResource ValueText}" Text="--" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <Grid x:Name="ProtectedDataContainer">
+                                <StackPanel x:Name="DataContentPanel">
+                                    <Border Style="{StaticResource Card}" Padding="10" Margin="0,0,0,14">
+                                        <DataGrid x:Name="ValuesGrid"
+                                                  AutoGenerateColumns="False"
+                                                  CanUserAddRows="False"
+                                                  IsReadOnly="True"
+                                                  HeadersVisibility="Column"
+                                                  GridLinesVisibility="Horizontal"
+                                                  VerticalGridLinesBrush="Transparent"
+                                                  HorizontalGridLinesBrush="{DynamicResource BorderSoft}"
+                                                  RowHeight="38"
+                                                  AlternatingRowBackground="{DynamicResource DataGridAltRowBackground}"
+                                                  RowBackground="{DynamicResource DataGridRowBackground}"
+                                                  Background="{DynamicResource CardBackground}"
+                                                  BorderThickness="0"
+                                                  ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                  PreviewMouseWheel="ValuesGrid_PreviewMouseWheel">
+
+                                            <DataGrid.ColumnHeaderStyle>
+                                                <Style TargetType="DataGridColumnHeader">
+                                                    <Setter Property="Background" Value="{DynamicResource DataGridHeaderBackground}" />
+                                                    <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+                                                    <Setter Property="FontWeight" Value="SemiBold" />
+                                                    <Setter Property="Padding" Value="10,8" />
+                                                    <Setter Property="BorderThickness" Value="0,0,0,1" />
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource BorderSoft}" />
+                                                </Style>
+                                            </DataGrid.ColumnHeaderStyle>
+
+                                            <DataGrid.Columns>
+                                                <DataGridTextColumn Header="{DynamicResource ColAddress}" Binding="{Binding Address}" Width="110" />
+                                                <DataGridTextColumn Header="{DynamicResource ColName}" Binding="{Binding Name}" Width="220" />
+                                                <DataGridTextColumn Header="{DynamicResource ColType}" Binding="{Binding ValueType}" Width="90" />
+                                                <DataGridTemplateColumn Header="{DynamicResource ColValue}" Width="*">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <Grid>
+                                                                <TextBlock Text="{Binding Value}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0">
+                                                                    <TextBlock.Style>
+                                                                        <Style TargetType="TextBlock">
+                                                                            <Setter Property="Visibility" Value="Visible" />
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding ValueType}" Value="Coil">
+                                                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </TextBlock.Style>
+                                                                </TextBlock>
+                                                                <Border Width="16" Height="16" CornerRadius="8" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                                    <Border.Style>
+                                                                        <Style TargetType="Border">
+                                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                                            <Setter Property="Background" Value="Silver" />
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding ValueType}" Value="Coil">
+                                                                                    <Setter Property="Visibility" Value="Visible" />
+                                                                                </DataTrigger>
+                                                                                <DataTrigger Binding="{Binding Value}" Value="1">
+                                                                                    <Setter Property="Background" Value="#10B981" />
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </Border.Style>
+                                                                </Border>
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                </DataGridTemplateColumn>
+                                                <DataGridTextColumn Header="{DynamicResource ColLastUpdate}" Binding="{Binding LastUpdate}" Width="180" />
+                                            </DataGrid.Columns>
+                                        </DataGrid>
+                                    </Border>
+                                </StackPanel>
+
+                                <Border x:Name="DataLockedPanel"
+                                        Style="{StaticResource Card}"
+                                        Padding="36"
+                                        Visibility="Visible">
+                                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <TextBlock FontFamily="Segoe Fluent Icons" FontSize="40" Text="&#xEB55;" HorizontalAlignment="Center" Foreground="{DynamicResource TextSecondary}" />
+                                        <TextBlock Margin="0,10,0,0"
+                                                   Style="{StaticResource SmallLabel}"
+                                                   FontSize="13"
+                                                   Text="Conecte ao PLC para visualizar os endereços e os logs em tempo real."
+                                                   HorizontalAlignment="Center"
+                                                   TextAlignment="Center" />
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- Settings -->
+                <ScrollViewer x:Name="SettingsPanel" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" Text="{DynamicResource SettingsTitle}" />
+                        <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource TextSecondary}" Text="Configurações de Email e Rede" />
+
+                        <StackPanel Margin="0,20,0,0">
+                            <Expander Header="Configurações SMTP" Style="{StaticResource SettingsExpanderStyle}" IsExpanded="False">
+                                <StackPanel Margin="0,10,0,0">
+                                    <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,12">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="180" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <TextBlock Grid.Row="0" Grid.ColumnSpan="2" FontSize="14" FontWeight="SemiBold" Text="{DynamicResource EmailSettings}" Margin="0,0,0,12" />
+
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="{DynamicResource SenderEmail}" Foreground="{DynamicResource TextSecondary}" TextAlignment="Right" Margin="0,0,12,10" VerticalAlignment="Center" />
+                                            <TextBox x:Name="SenderEmailTextBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,10" HorizontalAlignment="Stretch" MinWidth="320" ToolTip="Endereço de e-mail que aparecerá como remetente" />
+
+                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="{DynamicResource SmtpHost}" Foreground="{DynamicResource TextSecondary}" TextAlignment="Right" Margin="0,0,12,10" VerticalAlignment="Center" />
+                                            <TextBox x:Name="SmtpHostTextBox" Grid.Row="2" Grid.Column="1" Margin="0,0,0,10" HorizontalAlignment="Stretch" MinWidth="320" ToolTip="Endereço do servidor SMTP (ex: smtp.office365.com)" />
+
+                                            <TextBlock Grid.Row="3" Grid.Column="0" Text="{DynamicResource SmtpPort}" Foreground="{DynamicResource TextSecondary}" TextAlignment="Right" Margin="0,0,12,10" VerticalAlignment="Center" />
+                                            <TextBox x:Name="SmtpPortTextBox" Grid.Row="3" Grid.Column="1" Margin="0,0,0,10" HorizontalAlignment="Left" Width="120" ToolTip="Porta SMTP (comumente 587 ou 25)" />
+
+                                            <TextBlock Grid.Row="4" Grid.Column="0" Text="{DynamicResource SecurityType}" Foreground="{DynamicResource TextSecondary}" TextAlignment="Right" Margin="0,0,12,10" VerticalAlignment="Center" />
+                                            <ComboBox x:Name="SecurityTypeComboBox" Grid.Row="4" Grid.Column="1" Margin="0,0,0,10" HorizontalAlignment="Left" Width="180" ToolTip="Protocolo de segurança para criptografia">
+                                                <ComboBoxItem Content="{DynamicResource SecurityNone}" Tag="None" />
+                                                <ComboBoxItem Content="{DynamicResource SecuritySslTls}" Tag="SslTls" />
+                                                <ComboBoxItem Content="{DynamicResource SecurityStartTls}" Tag="StartTls" IsSelected="True" />
+                                            </ComboBox>
+
+                                            <TextBlock Grid.Row="5" Grid.Column="0" Text="SMTP User" Foreground="{DynamicResource TextSecondary}" TextAlignment="Right" Margin="0,0,12,10" VerticalAlignment="Center" />
+                                            <TextBox x:Name="SmtpUsernameTextBox" Grid.Row="5" Grid.Column="1" Margin="0,0,0,10" HorizontalAlignment="Stretch" MinWidth="320" ToolTip="Usuário para autenticação SMTP (se necessário)" />
+
+                                            <TextBlock Grid.Row="6" Grid.Column="0" Text="SMTP Password" Foreground="{DynamicResource TextSecondary}" TextAlignment="Right" Margin="0,0,12,10" VerticalAlignment="Center" />
+                                            <Grid Grid.Row="6" Grid.Column="1" Margin="0,0,0,10" HorizontalAlignment="Stretch" MinWidth="320">
+                                                <PasswordBox x:Name="SmtpPasswordBox" ToolTip="Senha para autenticação SMTP" Padding="5,5,35,5" />
+                                                <TextBox x:Name="SmtpPasswordTextBox" Visibility="Collapsed" Padding="5,5,35,5" />
+                                                <ToggleButton Content="&#xE18B;" FontFamily="Segoe Fluent Icons" HorizontalAlignment="Right" MinWidth="30" Margin="2" Background="Transparent" BorderThickness="0" Checked="SmtpShowPwd_Checked" Unchecked="SmtpShowPwd_Unchecked" ToolTip="Mostrar senha" />
+                                            </Grid>
+
+                                            <TextBlock Grid.Row="7" Grid.Column="0" Text="Timeout SMTP (segundos)" Foreground="{DynamicResource TextSecondary}" TextAlignment="Right" Margin="0,0,12,10" VerticalAlignment="Center" />
+                                            <TextBox x:Name="SmtpTimeoutTextBox" Grid.Row="7" Grid.Column="1" Margin="0,0,0,10" HorizontalAlignment="Left" Width="120" ToolTip="Tempo limite para a conexão com o servidor SMTP (padrão: 30s)" PreviewTextInput="NumericOnly_PreviewTextInput" />
+
+                                            <TextBlock Grid.Row="8" Grid.Column="0" Text="Tentativas SMTP (Retry)" Foreground="{DynamicResource TextSecondary}" TextAlignment="Right" Margin="0,0,12,10" VerticalAlignment="Center" />
+                                            <TextBox x:Name="SmtpRetryCountTextBox" Grid.Row="8" Grid.Column="1" Margin="0,0,0,10" HorizontalAlignment="Left" Width="120" ToolTip="Quantas vezes tentar reenviar o e-mail em caso de falha transitória" PreviewTextInput="NumericOnly_PreviewTextInput" />
+
+                                            <TextBlock Grid.Row="9" Grid.Column="0" Text="Intervalo Retry (segundos)" Foreground="{DynamicResource TextSecondary}" TextAlignment="Right" Margin="0,0,12,0" VerticalAlignment="Center" />
+                                            <TextBox x:Name="SmtpRetryDelayTextBox" Grid.Row="9" Grid.Column="1" Margin="0,0,0,0" HorizontalAlignment="Left" Width="120" ToolTip="Tempo de espera entre uma tentativa e outra" PreviewTextInput="NumericOnly_PreviewTextInput" />
+                                        </Grid>
+                                    </Border>
+
+                                    <Border Style="{StaticResource Card}" Padding="16">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="*" />
+                                            </Grid.RowDefinitions>
+
+                                            <TextBlock Grid.Row="0" FontSize="14" FontWeight="SemiBold" Text="{DynamicResource Recipients}" Margin="0,0,0,12" />
+
+                                            <Grid Grid.Row="1" Margin="0,0,0,12">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBox x:Name="NewRecipientTextBox" Grid.Column="0" HorizontalAlignment="Stretch" MinWidth="320" Height="32" />
+                                                <Button Grid.Column="1" Margin="10,0,0,0" MinWidth="120" Height="32" Content="{DynamicResource Add}" Click="AddRecipientButton_Click" />
+                                            </Grid>
+
+                                            <Border Grid.Row="2" Background="{DynamicResource InputBackgroundHover}" BorderBrush="{DynamicResource BorderSoft}" BorderThickness="1" CornerRadius="8" Padding="8">
+                                                <ListBox x:Name="RecipientsListBox" BorderThickness="0" Background="Transparent" ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                                    <ListBox.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Grid Margin="0,2">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="*" />
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                </Grid.ColumnDefinitions>
+
+                                                                <TextBlock Text="{Binding}" VerticalAlignment="Center" />
+
+                                                                <Button Grid.Column="1"
+                                                                        Tag="Secondary"
+                                                                        Padding="10,6"
+                                                                        MinWidth="96"
+                                                                        Margin="10,0,0,0"
+                                                                        Content="Remover"
+                                                                        Click="RemoveRecipientButton_Click"
+                                                                        ToolTip="Remove este destinatário" />
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ListBox.ItemTemplate>
+                                                </ListBox>
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
+                            </Expander>
+
+                            <Expander Header="Automação diária" Style="{StaticResource SettingsExpanderStyle}" IsExpanded="False">
+                                <Border Style="{StaticResource Card}" Padding="16" Margin="0,10,0,0">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="220" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <TextBlock Grid.Row="0" Grid.ColumnSpan="2" FontSize="14" FontWeight="SemiBold" Text="Envio automático diário" Margin="0,0,0,12" />
+
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Ativar envio diário" Foreground="{DynamicResource TextSecondary}" TextAlignment="Right" Margin="0,0,12,10" VerticalAlignment="Center" />
+                                        <CheckBox x:Name="AutoSendEnabledCheckBox" Grid.Row="1" Grid.Column="1" VerticalAlignment="Center" />
+
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Horário" Foreground="{DynamicResource TextSecondary}" TextAlignment="Right" Margin="0,0,12,10" VerticalAlignment="Center" />
+                                        <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,10">
+                                            <ComboBox x:Name="AutoSendHourComboBox" Width="76" Height="32" />
+                                            <TextBlock Margin="8,0" VerticalAlignment="Center" Text=":" Foreground="{DynamicResource TextSecondary}" />
+                                            <ComboBox x:Name="AutoSendMinuteComboBox" Width="76" Height="32" />
+                                            <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource TextSecondary}" Text="(24h)" />
+                                        </StackPanel>
+
+                                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Fuso horário" Foreground="{DynamicResource TextSecondary}" TextAlignment="Right" Margin="0,0,12,10" VerticalAlignment="Center" />
+                                        <ComboBox x:Name="AutoSendTimeZoneComboBox" Grid.Row="3" Grid.Column="1" Width="420" Height="32" HorizontalAlignment="Left" Margin="0,0,0,10" />
+
+                                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Retentar a cada (min)" Foreground="{DynamicResource TextSecondary}" TextAlignment="Right" Margin="0,0,12,0" VerticalAlignment="Center" />
+                                        <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBox x:Name="AutoSendRetryMinutesTextBox" Width="120" Height="32" HorizontalAlignment="Left" VerticalContentAlignment="Center" />
+
+                                            <TextBlock x:Name="LastAutoSendTextBlock" Margin="16,6,0,0" Foreground="{DynamicResource TextSecondary}" />
+
+                                            <Button x:Name="ResetLastAutoSendButton"
+                                                    Tag="Secondary"
+                                                    Margin="10,0,0,0"
+                                                    Padding="10,6"
+                                                    MinWidth="72"
+                                                    Height="28"
+                                                    VerticalAlignment="Center"
+                                                    Opacity="0.75"
+                                                    Content="Resetar"
+                                                    ToolTip="Reseta o último envio registrado para permitir testar o envio automático novamente"
+                                                    Click="ResetLastAutoSendButton_Click" />
+                                        </StackPanel>
+
+                                        <TextBlock Grid.Row="5" Grid.Column="0" Text="CSV de ontem" Foreground="{DynamicResource TextSecondary}" TextAlignment="Right" Margin="0,0,12,10" VerticalAlignment="Center" />
+                                        <StackPanel Grid.Row="5" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,10">
+                                            <TextBlock x:Name="YesterdayCsvStatusTextBlock" Foreground="{DynamicResource TextSecondary}" />
+                                            <Button x:Name="ResetYesterdayCsvButton"
+                                                    Tag="Secondary"
+                                                    Margin="10,0,0,0"
+                                                    Padding="10,6"
+                                                    MinWidth="72"
+                                                    Height="28"
+                                                    VerticalAlignment="Center"
+                                                    Opacity="0.75"
+                                                    Content="Resetar"
+                                                    ToolTip="Permite reenviar o CSV de ontem (catch-up)"
+                                                    Click="ResetYesterdayCsvButton_Click" />
+                                        </StackPanel>
+
+                                        <TextBlock Grid.Row="6" Grid.ColumnSpan="2" Margin="0,2,0,0" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap"
+                                                   Text="Dica: selecione 'Windows (Local)' para usar automaticamente o fuso configurado no Windows." />
+                                    </Grid>
+                                </Border>
+                            </Expander>
+
+                            <Expander Header="Configuração de Rede" Style="{StaticResource SettingsExpanderStyle}" IsExpanded="False">
+                                <StackPanel Margin="0,10,0,0">
+                                    <Border Style="{StaticResource Card}" Padding="16">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="220" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <TextBlock Grid.Row="0" Grid.ColumnSpan="3" FontSize="14" FontWeight="SemiBold" Text="Backup de logs em pasta de rede" Margin="0,0,0,12" />
+
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Ativar backup automático" Foreground="{DynamicResource TextSecondary}" TextAlignment="Right" Margin="0,0,12,10" VerticalAlignment="Center" />
+                                            <CheckBox x:Name="NetworkBackupEnabledCheckBox" Grid.Row="1" Grid.Column="1" VerticalAlignment="Center" />
+
+                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Pasta de destino" Foreground="{DynamicResource TextSecondary}" TextAlignment="Right" Margin="0,0,12,10" VerticalAlignment="Center" />
+                                            <TextBox x:Name="NetworkBackupFolderTextBox" Grid.Row="2" Grid.Column="1" Margin="0,0,10,10" Height="32" VerticalContentAlignment="Center" />
+                                            <Button x:Name="BrowseNetworkBackupFolderButton" Grid.Row="2" Grid.Column="2" Height="32" MinHeight="32" MinWidth="120" Margin="0,0,0,10" VerticalAlignment="Center" Content="Selecionar" Click="BrowseNetworkBackupFolderButton_Click" />
+
+                                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Usuário (opcional)" Foreground="{DynamicResource TextSecondary}" TextAlignment="Right" Margin="0,0,12,10" VerticalAlignment="Center" />
+                                            <TextBox x:Name="NetworkBackupUsernameTextBox" Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,0,0,10" Height="32" />
+
+                                            <TextBlock Grid.Row="4" Grid.Column="0" Text="Senha (opcional)" Foreground="{DynamicResource TextSecondary}" TextAlignment="Right" Margin="0,0,12,0" VerticalAlignment="Center" />
+                                            <Grid Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2">
+                                                <PasswordBox x:Name="NetworkBackupPasswordBox" Height="32" Padding="5,5,35,5" />
+                                                <TextBox x:Name="NetworkBackupPasswordTextBox" Visibility="Collapsed" Height="32" Padding="5,5,35,5" />
+                                                <ToggleButton Content="&#xE18B;" FontFamily="Segoe Fluent Icons" HorizontalAlignment="Right" MinWidth="30" Margin="2" Background="Transparent" BorderThickness="0" Checked="NetworkShowPwd_Checked" Unchecked="NetworkShowPwd_Unchecked" ToolTip="Mostrar senha" />
+                                            </Grid>
+                                        </Grid>
+                                    </Border>
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                        <Button Content="Testar Acesso" Tag="Secondary" MinWidth="120" Height="32" Click="TestNetworkBackup_Click" Margin="0,0,10,0" ToolTip="Testa a gravação de um arquivo na pasta de rede configurada" />
+                                        <TextBlock x:Name="NetworkBackupStatusTextBlock" Foreground="{DynamicResource TextSecondary}" Text="Os logs novos serão copiados automaticamente para a pasta de rede configurada." VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Expander>
+
+                            <Expander Header="Ações" Style="{StaticResource SettingsExpanderStyle}" IsExpanded="False">
+                                <Border Style="{StaticResource Card}" Padding="16" Margin="0,10,0,0">
+                                    <StackPanel>
+                                        <WrapPanel>
+                                            <Button x:Name="TestEmailButton" Tag="Secondary" MinWidth="180" Height="36" Content="Testar SMTP" Click="TestEmailButton_Click" Margin="0,0,10,10" />
+                                            <Button x:Name="SendTodayCsvButton" Tag="Primary" MinWidth="220" Height="36" Content="Enviar CSV do dia" Click="SendTodayCsvButton_Click" Margin="0,0,10,10" />
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </Border>
+                            </Expander>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+
+            </Grid>
+            
+            <StatusBar Grid.Row="2" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource BorderSoft}" BorderThickness="0,1,0,0" Padding="10,4">
+                <StatusBarItem>
+                    <TextBlock x:Name="StatusTextBlock" Text="{DynamicResource Idle}" Foreground="{DynamicResource TextSecondary}" TextTrimming="CharacterEllipsis" MaxWidth="800" />
+                </StatusBarItem>
+            </StatusBar>
+        </Grid>
+    </Grid>
+</Window>

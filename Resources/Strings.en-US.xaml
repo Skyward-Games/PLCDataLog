@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+
+    <sys:String x:Key="AppTitle">PLC Data Log</sys:String>
+    <sys:String x:Key="HeaderText">Delta AS (Modbus/TCP) - LocalHost:502</sys:String>
+
+    <sys:String x:Key="Start">Start</sys:String>
+    <sys:String x:Key="Stop">Stop</sys:String>
+    <sys:String x:Key="PollMs">Poll (ms):</sys:String>
+    <sys:String x:Key="UnitId">Unit ID:</sys:String>
+    <sys:String x:Key="Language">Language:</sys:String>
+
+    <sys:String x:Key="LiveValues">Live values</sys:String>
+    <sys:String x:Key="Status">Status</sys:String>
+    <sys:String x:Key="Notes">Notes</sys:String>
+    <sys:String x:Key="NotesText">Reads holding registers for D-areas and coils for M-bits using the Modbus addresses listed in code.</sys:String>
+
+    <sys:String x:Key="ColAddress">Address</sys:String>
+    <sys:String x:Key="ColName">Name</sys:String>
+    <sys:String x:Key="ColType">Type</sys:String>
+    <sys:String x:Key="ColValue">Value</sys:String>
+    <sys:String x:Key="ColLastUpdate">Last update</sys:String>
+
+    <sys:String x:Key="FooterHint">If values look wrong, adjust: Unit ID, word order for Int32, and byte order for ASCII strings.</sys:String>
+
+    <sys:String x:Key="Idle">Idle</sys:String>
+    <sys:String x:Key="Starting">Starting...</sys:String>
+    <sys:String x:Key="InvalidPoll">Invalid poll interval.</sys:String>
+    <sys:String x:Key="InvalidUnitId">Invalid unit id.</sys:String>
+    <sys:String x:Key="Connecting">Connecting to {0}:{1} (Unit {2})...</sys:String>
+    <sys:String x:Key="ConnectedPolling">Connected. Polling...</sys:String>
+    <sys:String x:Key="PollingLastOk">Polling... Last OK: {0}</sys:String>
+    <sys:String x:Key="ReadError">Read error: {0}</sys:String>
+    <sys:String x:Key="StoppedWithError">Stopped with error: {0}</sys:String>
+
+    <sys:String x:Key="MenuDashboard">Dashboard</sys:String>
+    <sys:String x:Key="MenuSettings">Settings</sys:String>
+
+    <sys:String x:Key="SettingsTitle">Settings</sys:String>
+    <sys:String x:Key="EmailSettings">Email Settings</sys:String>
+    <sys:String x:Key="SenderEmail">Sender email</sys:String>
+    <sys:String x:Key="SmtpHost">SMTP host</sys:String>
+    <sys:String x:Key="SmtpPort">Port</sys:String>
+    <sys:String x:Key="SecurityType">Security type</sys:String>
+    <sys:String x:Key="TestRecipient">Default test email</sys:String>
+    <sys:String x:Key="Recipients">Recipients</sys:String>
+    <sys:String x:Key="Add">Add</sys:String>
+    <sys:String x:Key="Remove">Remove</sys:String>
+    <sys:String x:Key="Save">Save</sys:String>
+    <sys:String x:Key="TestConnection">Test connection</sys:String>
+
+    <sys:String x:Key="SecurityNone">None</sys:String>
+    <sys:String x:Key="SecuritySslTls">SSL/TLS</sys:String>
+    <sys:String x:Key="SecurityStartTls">STARTTLS</sys:String>
+
+</ResourceDictionary>

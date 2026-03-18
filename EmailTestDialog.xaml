@@ -1,0 +1,46 @@
+<Window x:Class="PLCDataLog.EmailTestDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Teste SMTP" Height="320" Width="620"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{DynamicResource CardBackground}">
+    <Grid Margin="18">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" FontSize="16" FontWeight="SemiBold" Text="Teste de envio de e-mail (SMTP)" />
+        <TextBlock Grid.Row="1" Margin="0,8,0,0" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap"
+                   Text="Este teste envia um e-mail simples usando as configuracoes SMTP informadas em Configuracoes. Use para validar host/porta/seguranca e credenciais antes de enviar o CSV." />
+
+        <Border Grid.Row="2" Margin="0,14,0,0" Padding="10" Background="{DynamicResource ButtonSecondaryBackground}" BorderBrush="{DynamicResource BorderSoft}" BorderThickness="1" CornerRadius="8">
+            <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}"
+                       Text="Dica: Gmail exige App Password (senha de aplicativo) e normalmente o SMTP User deve ser o mesmo do E-mail de envio." />
+        </Border>
+
+        <Grid Grid.Row="3" Margin="0,14,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="150" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Destinatario de teste" />
+            <TextBox x:Name="RecipientTextBox" Grid.Column="1" Margin="10,0,0,0" MinWidth="360" />
+        </Grid>
+
+        <StackPanel Grid.Row="4" Margin="0,14,0,0">
+            <ProgressBar x:Name="Progress" Height="18" IsIndeterminate="True" Visibility="Collapsed" />
+            <TextBlock x:Name="StatusText" Margin="0,10,0,0" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <Button x:Name="CancelButton" Tag="Secondary" Width="120" Margin="0,0,10,0" Content="Fechar" Click="CancelButton_Click" />
+            <Button x:Name="SendButton" Tag="Primary" Width="160" Content="Enviar teste" Click="SendButton_Click" />
+        </StackPanel>
+    </Grid>
+</Window>
