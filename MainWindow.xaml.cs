@@ -102,12 +102,12 @@ namespace PLCDataLog
             Rows.Add(new PlcValueRow("D21636", "Total_NOK", PlcValueType.Word, modbusAddress: 21636, registerCount: 1));
             Rows.Add(new PlcValueRow("D21668", "Total_Produzidas", PlcValueType.Word, modbusAddress: 21668, registerCount: 1));
             Rows.Add(new PlcValueRow("D21670", "Quantidade_Meta", PlcValueType.Word, modbusAddress: 21670, registerCount: 1));
-            Rows.Add(new PlcValueRow("D21674", "SKU_Nome_Produto", PlcValueType.DWord, modbusAddress: 21674, registerCount: 2));
+            Rows.Add(new PlcValueRow("D21674", "SKU_Nome_Produto", PlcValueType.Word, modbusAddress: 21674, registerCount: 1));
             Rows.Add(new PlcValueRow("D21700", "Ordem_Producao", PlcValueType.AsciiString, modbusAddress: 21700, registerCount: 16));
-            Rows.Add(new PlcValueRow("M167", "Broca_Errada", PlcValueType.Coil, modbusAddress: 2215, registerCount: 1));
-            Rows.Add(new PlcValueRow("M168", "Confirma_Erro", PlcValueType.Coil, modbusAddress: 2216, registerCount: 1));
-            Rows.Add(new PlcValueRow("M0", "Iniciar_IHM", PlcValueType.Coil, modbusAddress: 2048, registerCount: 1));
-            Rows.Add(new PlcValueRow("M1", "Interromper_IHM", PlcValueType.Coil, modbusAddress: 2049, registerCount: 1));
+            Rows.Add(new PlcValueRow("M167", "Broca_Errada", PlcValueType.Coil, modbusAddress: 2214, registerCount: 1));
+            Rows.Add(new PlcValueRow("M168", "Confirma_Erro", PlcValueType.Coil, modbusAddress: 2215, registerCount: 1));
+            Rows.Add(new PlcValueRow("M0", "Iniciar_IHM", PlcValueType.Coil, modbusAddress: 2047, registerCount: 1));
+            Rows.Add(new PlcValueRow("M1", "Interromper_IHM", PlcValueType.Coil, modbusAddress: 2048, registerCount: 1));
 
             ValuesGrid.ItemsSource = Rows;
 
@@ -1860,6 +1860,28 @@ namespace PLCDataLog
             static uint ReadU32BE(ReadOnlySpan<byte> buffer, int offset)
                 => (uint)((buffer[offset] << 24) | (buffer[offset + 1] << 16) | (buffer[offset + 2] << 8) | buffer[offset + 3]);
 
+            static string ReadAsciiSwappedByRegister(ReadOnlySpan<byte> buffer)
+            {
+                if (buffer.Length == 0)
+                    return string.Empty;
+
+                var normalized = new byte[buffer.Length];
+                for (var i = 0; i < buffer.Length; i += 2)
+                {
+                    if (i + 1 < buffer.Length)
+                    {
+                        normalized[i] = buffer[i + 1];
+                        normalized[i + 1] = buffer[i];
+                    }
+                    else
+                    {
+                        normalized[i] = buffer[i];
+                    }
+                }
+
+                return Encoding.ASCII.GetString(normalized).TrimEnd('\0', ' ');
+            }
+
             ct.ThrowIfCancellationRequested();
 
             PlcValueRow[] rows = Array.Empty<PlcValueRow>();
@@ -1882,7 +1904,7 @@ namespace PLCDataLog
                     case PlcValueType.Coil:
                     {
                         var raw = client.ReadCoils(unitId, row.ModbusAddress, row.RegisterCount);
-                        var isOn = raw.Length > 0 && (raw[0] & 0b_0000_0001) != 0;
+                        var isOn = raw.Length > 0 && raw[0] != 0;
                         value = isOn ? "1" : "0";
                         break;
                     }
@@ -1890,7 +1912,7 @@ namespace PLCDataLog
                     case PlcValueType.AsciiString:
                     {
                         var raw = client.ReadHoldingRegisters(unitId, (ushort)row.ModbusAddress, (ushort)row.RegisterCount);
-                        value = Encoding.ASCII.GetString(raw).TrimEnd('\0', ' ');
+                        value = ReadAsciiSwappedByRegister(raw);
                         break;
                     }
 
