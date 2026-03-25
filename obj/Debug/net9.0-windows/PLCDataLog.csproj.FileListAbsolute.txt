@@ -38,3 +38,4 @@ D:\NETProjects\PLCDataLog\obj\Debug\net9.0-windows\SendProgressDialog.g.cs
 D:\NETProjects\PLCDataLog\obj\Debug\net9.0-windows\EmailTestDialog.baml
 D:\NETProjects\PLCDataLog\obj\Debug\net9.0-windows\EmailTestDialog.g.cs
 D:\NETProjects\PLCDataLog\obj\Debug\net9.0-windows\PLCDataLog_MarkupCompile.lref
+D:\NETProjects\PLCDataLog\obj\Debug\net9.0-windows\PLCDataLog.sourcelink.json

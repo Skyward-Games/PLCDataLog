@@ -38,3 +38,4 @@ D:\NETProjects\PLCDataLog\obj\Release\net9.0-windows\refint\PLCDataLog.dll
 D:\NETProjects\PLCDataLog\obj\Release\net9.0-windows\PLCDataLog.pdb
 D:\NETProjects\PLCDataLog\obj\Release\net9.0-windows\PLCDataLog.genruntimeconfig.cache
 D:\NETProjects\PLCDataLog\obj\Release\net9.0-windows\ref\PLCDataLog.dll
+D:\NETProjects\PLCDataLog\obj\Release\net9.0-windows\PLCDataLog.sourcelink.json

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -56,6 +57,10 @@ namespace PLCDataLog
         private bool _isPlcConnected;
         private DateTime _lastAutoSendRefreshReadUtc = DateTime.MinValue;
 
+        private FileSystemWatcher? _recipeWatcher;
+        private readonly ConcurrentDictionary<string, byte> _recipeCopyInProgress = new(StringComparer.OrdinalIgnoreCase);
+        private int? _lastKnownNokCount;
+
         public ObservableCollection<PlcValueRow> Rows { get; } = new();
 
         public MainWindow()
@@ -107,11 +112,10 @@ namespace PLCDataLog
             ValuesGrid.ItemsSource = Rows;
 
             InitializeScheduleUi();
-            HookSettingsAutoSave();
             LoadSettingsToUi();
             SelectDashboard();
 
-            Deactivated += (_, _) => FlushPendingSettingsSave();
+            InitializeRecipeMonitor();
 
             _clockTimer = new DispatcherTimer(DispatcherPriority.Background)
             {
@@ -578,6 +582,18 @@ namespace PLCDataLog
             _dailyScheduler?.Dispose();
             _dailyScheduler = null;
 
+            if (_recipeWatcher is not null)
+            {
+                try
+                {
+                    _recipeWatcher.EnableRaisingEvents = false;
+                    _recipeWatcher.Dispose();
+                }
+                catch { }
+
+                _recipeWatcher = null;
+            }
+
             _cts?.Cancel();
 
             _clockTimer.Stop();
@@ -676,6 +692,12 @@ namespace PLCDataLog
             NetworkBackupUsernameTextBox.Text = _settings.NetworkBackup.Username;
             NetworkBackupPasswordBox.Password = _settings.NetworkBackup.Password;
 
+            RecipeMonitorEnabledCheckBox.IsChecked = _settings.RecipeMonitor.Enabled;
+            RecipeSourceFolderTextBox.Text = _settings.RecipeMonitor.SourceFolder;
+            RecipeTargetFolderTextBox.Text = _settings.RecipeMonitor.TargetFolder;
+            RecipeNetworkUsernameTextBox.Text = _settings.RecipeMonitor.Username;
+            RecipeNetworkPasswordBox.Password = _settings.RecipeMonitor.Password;
+
             var securityTag = _settings.Email.SecurityType.ToString();
             foreach (var item in SecurityTypeComboBox.Items.OfType<ComboBoxItem>())
             {
@@ -690,6 +712,9 @@ namespace PLCDataLog
 
             RefreshClockWidget();
             UpdateNetworkBackupStatus("Backup de rede pronto para uso.");
+            UpdateRecipeMonitorStatus(_settings.RecipeMonitor.Enabled
+                ? "Monitoramento de receitas habilitado."
+                : "Monitoramento de receitas desativado.");
         }
 
         private void SaveUiToSettings()
@@ -752,6 +777,12 @@ namespace PLCDataLog
             _settings.NetworkBackup.Username = (NetworkBackupUsernameTextBox.Text ?? string.Empty).Trim();
             _settings.NetworkBackup.Password = NetworkBackupPasswordBox.Password;
 
+            _settings.RecipeMonitor.Enabled = RecipeMonitorEnabledCheckBox.IsChecked == true;
+            _settings.RecipeMonitor.SourceFolder = (RecipeSourceFolderTextBox.Text ?? string.Empty).Trim();
+            _settings.RecipeMonitor.TargetFolder = (RecipeTargetFolderTextBox.Text ?? string.Empty).Trim();
+            _settings.RecipeMonitor.Username = (RecipeNetworkUsernameTextBox.Text ?? string.Empty).Trim();
+            _settings.RecipeMonitor.Password = RecipeNetworkPasswordBox.Password;
+
             LastAutoSendTextBlock.Text = string.IsNullOrWhiteSpace(_settings.EmailAutomation.LastSuccessfulSendDate)
                 ? "Último envio: (nunca)"
                 : $"Último envio: {_settings.EmailAutomation.LastSuccessfulSendDate}";
@@ -770,11 +801,6 @@ namespace PLCDataLog
         {
             AutomationLog.Ui("Email", "Test SMTP dialog open");
             SaveUiToSettings();
-            if (!TryPersistSettings(out var error))
-            {
-                StatusTextBlock.Text = $"Falha ao salvar configurações: {error}";
-                return;
-            }
 
             var dialog = new EmailTestDialog(_settings.Email, _smtpEmailService)
             {
@@ -782,6 +808,86 @@ namespace PLCDataLog
             };
 
             dialog.ShowDialog();
+        }
+
+        private void SaveSmtpSettingsButton_Click(object sender, RoutedEventArgs e)
+        {
+            SaveUiToSettings();
+            if (!TryPersistSettings(out var error))
+            {
+                StatusTextBlock.Text = $"Falha ao salvar configurações SMTP: {error}";
+                return;
+            }
+
+            System.Windows.MessageBox.Show(this, "Configurações SMTP salvas com sucesso.", "Sucesso", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        private void SaveAutomationSettingsButton_Click(object sender, RoutedEventArgs e)
+        {
+            SaveUiToSettings();
+            if (!TryPersistSettings(out var error))
+            {
+                StatusTextBlock.Text = $"Falha ao salvar automação: {error}";
+                return;
+            }
+
+            System.Windows.MessageBox.Show(this, "Configurações de automação salvas com sucesso.", "Sucesso", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        private void SaveNetworkSettingsButton_Click(object sender, RoutedEventArgs e)
+        {
+            SaveUiToSettings();
+            if (!TryPersistSettings(out var error))
+            {
+                StatusTextBlock.Text = $"Falha ao salvar backup de rede: {error}";
+                return;
+            }
+
+            System.Windows.MessageBox.Show(this, "Configurações de backup de rede salvas com sucesso.", "Sucesso", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        private void SaveRecipeSettingsButton_Click(object sender, RoutedEventArgs e)
+        {
+            SaveUiToSettings();
+            if (!TryPersistSettings(out var error))
+            {
+                StatusTextBlock.Text = $"Falha ao salvar monitoramento de receita: {error}";
+                return;
+            }
+
+            InitializeRecipeMonitor();
+            System.Windows.MessageBox.Show(this, "Configurações de receita salvas com sucesso.", "Sucesso", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        private void TestRecipeDestination_Click(object sender, RoutedEventArgs e)
+        {
+            SaveUiToSettings();
+
+            var target = _settings.RecipeMonitor.TargetFolder;
+            if (string.IsNullOrWhiteSpace(target))
+            {
+                System.Windows.MessageBox.Show(this, "Informe a pasta destino da receita.", "Aviso", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            try
+            {
+                using var _ = NetworkShareConnection.ConnectIfNeeded(
+                    target,
+                    _settings.RecipeMonitor.Username,
+                    _settings.RecipeMonitor.Password);
+
+                Directory.CreateDirectory(target);
+                var testFile = Path.Combine(target, $"recipe_test_{Guid.NewGuid():N}.tmp");
+                File.WriteAllText(testFile, "test");
+                File.Delete(testFile);
+
+                System.Windows.MessageBox.Show(this, "Destino de receita validado com sucesso.", "Sucesso", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show(this, $"Falha ao acessar destino da receita.\n\n{ex.Message}", "Erro", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private void AddRecipientButton_Click(object sender, RoutedEventArgs e)
@@ -1017,13 +1123,9 @@ namespace PLCDataLog
             }
 
             SaveUiToSettings();
-            if (!TryPersistSettings(out var saveError))
-            {
-                StatusTextBlock.Text = $"Falha ao salvar configurações: {saveError}";
-                return;
-            }
 
             _previousValues.Clear();
+            _lastKnownNokCount = null;
 
             StartButton.IsEnabled = false;
             StopButton.IsEnabled = true;
@@ -1109,6 +1211,9 @@ namespace PLCDataLog
         {
             PollOnce(client, unitId, ct);
             var snapshot = Rows.Select(r => (Key: (string)r.Name, Value: (string)(r.Value ?? string.Empty))).ToArray();
+
+            HandleImmediateNokAlert(snapshot);
+
             var changes = CsvLogService.GetChanges(_previousValues, snapshot);
             if (changes.Count > 0)
             {
@@ -1120,6 +1225,74 @@ namespace PLCDataLog
 
             CsvLogService.UpdatePrevious(_previousValues, snapshot);
             return changes;
+        }
+
+        private void HandleImmediateNokAlert(IReadOnlyList<(string Key, string Value)> snapshot)
+        {
+            var nok = snapshot.FirstOrDefault(s => string.Equals(s.Key, "Total_NOK", StringComparison.OrdinalIgnoreCase));
+            if (!int.TryParse(nok.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var currentNok))
+                return;
+
+            if (_lastKnownNokCount is null)
+            {
+                _lastKnownNokCount = currentNok;
+                return;
+            }
+
+            if (currentNok <= _lastKnownNokCount.Value)
+                return;
+
+            var increment = currentNok - _lastKnownNokCount.Value;
+            _lastKnownNokCount = currentNok;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var settings = _settingsService.Load();
+                    if (!IsValidEmail(settings.Email.SenderEmail) ||
+                        string.IsNullOrWhiteSpace(settings.Email.SmtpHost) ||
+                        settings.Email.SmtpPort is <= 0 or > 65535 ||
+                        settings.Email.Recipients.Count == 0)
+                    {
+                        return;
+                    }
+
+                    var now = DateTime.Now;
+                    var changedSection = string.Join(Environment.NewLine,
+                        snapshot.Where(s => s.Key.Contains("NOK", StringComparison.OrdinalIgnoreCase)
+                                            || s.Key.Contains("Erro", StringComparison.OrdinalIgnoreCase)
+                                            || s.Key.Contains("Broca", StringComparison.OrdinalIgnoreCase)
+                                            || s.Key.Contains("Confirma", StringComparison.OrdinalIgnoreCase))
+                                .Select(s => $"- {s.Key}: {s.Value}"));
+
+                    if (string.IsNullOrWhiteSpace(changedSection))
+                        changedSection = "- Não foi possível identificar campo específico da falha.";
+
+                    var fullLog = string.Join(Environment.NewLine, snapshot.Select(s => $"- {s.Key}: {s.Value}"));
+
+                    var body =
+                        $"Alerta de NOK detectado às {now:yyyy-MM-dd HH:mm:ss}." + Environment.NewLine +
+                        $"Incremento detectado: +{increment}. Total NOK atual: {currentNok}." + Environment.NewLine + Environment.NewLine +
+                        "Possível origem da falha:" + Environment.NewLine +
+                        changedSection + Environment.NewLine + Environment.NewLine +
+                        "Log atual do ciclo:" + Environment.NewLine +
+                        fullLog;
+
+                    await _smtpEmailService.SendMessageAsync(
+                        settings.Email,
+                        $"PLCDataLog - ALERTA NOK {now:yyyy-MM-dd HH:mm:ss}",
+                        body,
+                        settings.Email.Recipients,
+                        CancellationToken.None);
+
+                    AutomationLog.Info($"Alerta NOK enviado. incremento={increment} total={currentNok}.");
+                }
+                catch (Exception ex)
+                {
+                    AutomationLog.Error(ex, "Falha ao enviar alerta imediato de NOK");
+                }
+            });
         }
 
         private string EnsureTodayCsvExists()
@@ -1155,8 +1328,6 @@ namespace PLCDataLog
             try
             {
                 SaveUiToSettings();
-                if (!TryPersistSettings(out var saveError))
-                    throw new InvalidOperationException($"Falha ao salvar configurações: {saveError}");
 
                 progress.Show();
 
@@ -1319,6 +1490,142 @@ namespace PLCDataLog
             Dispatcher.Invoke(() => NetworkBackupStatusTextBlock.Text = message);
         }
 
+        private void UpdateRecipeMonitorStatus(string message)
+        {
+            Dispatcher.Invoke(() => RecipeMonitorStatusTextBlock.Text = message);
+        }
+
+        private void InitializeRecipeMonitor()
+        {
+            try
+            {
+                _recipeWatcher?.Dispose();
+                _recipeWatcher = null;
+
+                var cfg = _settings.RecipeMonitor;
+                if (!cfg.Enabled)
+                {
+                    UpdateRecipeMonitorStatus("Monitoramento de receitas desativado.");
+                    return;
+                }
+
+                if (string.IsNullOrWhiteSpace(cfg.SourceFolder) || !Directory.Exists(cfg.SourceFolder))
+                {
+                    UpdateRecipeMonitorStatus("Pasta origem da receita inválida ou inexistente.");
+                    return;
+                }
+
+                _recipeWatcher = new FileSystemWatcher(cfg.SourceFolder)
+                {
+                    IncludeSubdirectories = false,
+                    NotifyFilter = NotifyFilters.FileName | NotifyFilters.CreationTime,
+                    Filter = "*.*",
+                    EnableRaisingEvents = true,
+                };
+
+                _recipeWatcher.Created += RecipeWatcher_OnCreatedOrRenamed;
+                _recipeWatcher.Renamed += RecipeWatcher_OnCreatedOrRenamed;
+
+                UpdateRecipeMonitorStatus($"Monitorando receitas em: {cfg.SourceFolder}");
+            }
+            catch (Exception ex)
+            {
+                UpdateRecipeMonitorStatus($"Falha no monitoramento de receitas: {ex.Message}");
+            }
+        }
+
+        private void RecipeWatcher_OnCreatedOrRenamed(object sender, FileSystemEventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(e.FullPath))
+                return;
+
+            if (!_recipeCopyInProgress.TryAdd(e.FullPath, 0))
+                return;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await CopyRecipeFileWithRetryAsync(e.FullPath, CancellationToken.None);
+                }
+                finally
+                {
+                    _recipeCopyInProgress.TryRemove(e.FullPath, out _);
+                }
+            });
+        }
+
+        private async Task CopyRecipeFileWithRetryAsync(string sourceFilePath, CancellationToken ct)
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                try
+                {
+                    var cfg = _settings.RecipeMonitor;
+                    if (string.IsNullOrWhiteSpace(cfg.TargetFolder))
+                    {
+                        UpdateRecipeMonitorStatus("Destino da receita não configurado.");
+                        await Task.Delay(TimeSpan.FromSeconds(2), ct);
+                        continue;
+                    }
+
+                    if (!File.Exists(sourceFilePath))
+                    {
+                        await Task.Delay(TimeSpan.FromMilliseconds(500), ct);
+                        continue;
+                    }
+
+                    using var _ = NetworkShareConnection.ConnectIfNeeded(
+                        cfg.TargetFolder,
+                        cfg.Username,
+                        cfg.Password);
+
+                    var fileName = Path.GetFileName(sourceFilePath);
+                    var targetPath = Path.Combine(cfg.TargetFolder, fileName);
+                    Directory.CreateDirectory(cfg.TargetFolder);
+
+                    using var source = new FileStream(sourceFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                    using var target = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
+
+                    var total = source.Length <= 0 ? 1 : source.Length;
+                    var copied = 0L;
+                    var buffer = new byte[1024 * 64];
+
+                    int read;
+                    while ((read = await source.ReadAsync(buffer.AsMemory(0, buffer.Length), ct)) > 0)
+                    {
+                        await target.WriteAsync(buffer.AsMemory(0, read), ct);
+                        copied += read;
+
+                        var pct = (int)Math.Clamp((copied * 100.0) / total, 0, 100);
+                        Dispatcher.Invoke(() =>
+                        {
+                            RecipeCopyProgressBar.Value = pct;
+                            RecipeCopyProgressTextBlock.Text = $"Cópia receita: {pct}%";
+                        });
+                    }
+
+                    Dispatcher.Invoke(() =>
+                    {
+                        RecipeCopyProgressBar.Value = 100;
+                        RecipeCopyProgressTextBlock.Text = "Cópia receita: 100%";
+                    });
+
+                    UpdateRecipeMonitorStatus($"Receita copiada: {targetPath}");
+                    return;
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    UpdateRecipeMonitorStatus($"Falha ao copiar receita. Tentando novamente... {ex.Message}");
+                    await Task.Delay(TimeSpan.FromSeconds(2), ct);
+                }
+            }
+        }
+
         private void ShowTrayBalloon(string title, string text, WinForms.ToolTipIcon icon)
         {
             try
@@ -1346,10 +1653,7 @@ namespace PLCDataLog
             };
 
             if (dialog.ShowDialog() == true)
-            {
                 NetworkBackupFolderTextBox.Text = dialog.FolderName;
-                SaveSettingsFromUiAndPersist();
-            }
         }
 
         private void NumericOnly_PreviewTextInput(object sender, System.Windows.Input.TextCompositionEventArgs e)
@@ -1362,7 +1666,6 @@ namespace PLCDataLog
             SmtpPasswordTextBox.Text = SmtpPasswordBox.Password;
             SmtpPasswordTextBox.Visibility = Visibility.Visible;
             SmtpPasswordBox.Visibility = Visibility.Collapsed;
-            SaveSettingsFromUiAndPersist();
         }
 
         private void SmtpShowPwd_Unchecked(object sender, RoutedEventArgs e)
@@ -1370,7 +1673,6 @@ namespace PLCDataLog
             SmtpPasswordBox.Password = SmtpPasswordTextBox.Text;
             SmtpPasswordTextBox.Visibility = Visibility.Collapsed;
             SmtpPasswordBox.Visibility = Visibility.Visible;
-            SaveSettingsFromUiAndPersist();
         }
 
         private void NetworkShowPwd_Checked(object sender, RoutedEventArgs e)
@@ -1378,7 +1680,6 @@ namespace PLCDataLog
             NetworkBackupPasswordTextBox.Text = NetworkBackupPasswordBox.Password;
             NetworkBackupPasswordTextBox.Visibility = Visibility.Visible;
             NetworkBackupPasswordBox.Visibility = Visibility.Collapsed;
-            SaveSettingsFromUiAndPersist();
         }
 
         private void NetworkShowPwd_Unchecked(object sender, RoutedEventArgs e)
@@ -1386,18 +1687,12 @@ namespace PLCDataLog
             NetworkBackupPasswordBox.Password = NetworkBackupPasswordTextBox.Text;
             NetworkBackupPasswordTextBox.Visibility = Visibility.Collapsed;
             NetworkBackupPasswordBox.Visibility = Visibility.Visible;
-            SaveSettingsFromUiAndPersist();
         }
 
         private void TestNetworkBackup_Click(object sender, RoutedEventArgs e)
         {
             AutomationLog.Ui("NetworkBackup", "Test access clicked");
             SaveUiToSettings();
-            if (!TryPersistSettings(out var saveError))
-            {
-                System.Windows.MessageBox.Show(this, $"Falha ao salvar configurações.\n\n{saveError}", "Erro", MessageBoxButton.OK, MessageBoxImage.Error);
-                return;
-            }
 
             var path = _settings.NetworkBackup.TargetFolder;
             if (string.IsNullOrWhiteSpace(path))

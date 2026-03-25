@@ -8,7 +8,7 @@
                 <ResourceDictionary Source="Resources/Strings.pt-BR.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
-            <SolidColorBrush x:Key="PrimaryColor" Color="#0F6CBD" />
+            <SolidColorBrush x:Key="PrimaryColor" Color="#005FA3" />
             <SolidColorBrush x:Key="BackgroundColor" Color="#F5F5F5" />
             <SolidColorBrush x:Key="CardBackground" Color="#FCFCFC" />
             <SolidColorBrush x:Key="LayerBackground" Color="#FFFFFFFF" />
@@ -17,9 +17,9 @@
             <SolidColorBrush x:Key="BorderSoft" Color="#1F000000" />
             <SolidColorBrush x:Key="FocusStroke" Color="#0F6CBD" />
 
-            <SolidColorBrush x:Key="ButtonPrimaryBackground" Color="#0F6CBD" />
-            <SolidColorBrush x:Key="ButtonPrimaryBackgroundHover" Color="#115EA3" />
-            <SolidColorBrush x:Key="ButtonPrimaryBackgroundPressed" Color="#0C3B5E" />
+            <SolidColorBrush x:Key="ButtonPrimaryBackground" Color="#005FA3" />
+            <SolidColorBrush x:Key="ButtonPrimaryBackgroundHover" Color="#004F89" />
+            <SolidColorBrush x:Key="ButtonPrimaryBackgroundPressed" Color="#003B66" />
             <SolidColorBrush x:Key="ButtonPrimaryForeground" Color="#FFFFFF" />
 
             <SolidColorBrush x:Key="ButtonSecondaryBackground" Color="#F6F6F6" />
@@ -58,7 +58,7 @@
                 <Setter Property="BorderBrush" Value="{DynamicResource ButtonSecondaryBorder}" />
                 <Setter Property="BorderThickness" Value="1" />
                 <Setter Property="Padding" Value="16,11" />
-                <Setter Property="FontWeight" Value="Normal" />
+                <Setter Property="FontWeight" Value="SemiBold" />
                 <Setter Property="Cursor" Value="Hand" />
                 <Setter Property="MinHeight" Value="36" />
                 <Setter Property="Margin" Value="0,0,0,0" />

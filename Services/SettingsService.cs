@@ -107,10 +107,10 @@ public sealed class SettingsService
 
     public static string GetDefaultDataRootPath()
     {
-        var root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        if (string.IsNullOrWhiteSpace(root))
-            root = AppContext.BaseDirectory;
+        var baseDir = AppContext.BaseDirectory;
+        if (string.IsNullOrWhiteSpace(baseDir))
+            baseDir = Environment.CurrentDirectory;
 
-        return Path.Combine(root, "PLCDataLog");
+        return Path.Combine(baseDir, "Data");
     }
 }

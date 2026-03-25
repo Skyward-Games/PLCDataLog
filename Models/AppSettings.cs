@@ -8,6 +8,7 @@ public sealed class AppSettings
     public EmailAutomationSettings EmailAutomation { get; set; } = new();
     public PlcConnectionSettings PlcConnection { get; set; } = new();
     public NetworkBackupSettings NetworkBackup { get; set; } = new();
+    public RecipeMonitorSettings RecipeMonitor { get; set; } = new();
     public UiSettings Ui { get; set; } = new();
 }
 
@@ -78,6 +79,15 @@ public sealed class PlcConnectionSettings
 public sealed class NetworkBackupSettings
 {
     public bool Enabled { get; set; }
+    public string TargetFolder { get; set; } = string.Empty;
+    public string Username { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
+}
+
+public sealed class RecipeMonitorSettings
+{
+    public bool Enabled { get; set; }
+    public string SourceFolder { get; set; } = string.Empty;
     public string TargetFolder { get; set; } = string.Empty;
     public string Username { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;

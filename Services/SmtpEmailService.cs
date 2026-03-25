@@ -60,6 +60,25 @@ public sealed class SmtpEmailService
         await SendWithRetryAsync(settings, subject, body, attachmentPath, distinctRecipients, ct);
     }
 
+    public async Task SendMessageAsync(EmailSettings settings, string subject, string body, IEnumerable<string> recipients, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        if (recipients is null)
+            throw new InvalidOperationException("Destinatários não configurados.");
+
+        var distinctRecipients = recipients
+            .Select(r => (r ?? string.Empty).Trim())
+            .Where(r => !string.IsNullOrWhiteSpace(r))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (distinctRecipients.Length == 0)
+            throw new InvalidOperationException("Nenhum destinatário configurado.");
+
+        await SendWithRetryAsync(settings, subject, body, null, distinctRecipients, ct);
+    }
+
     private static void ValidateSettings(EmailSettings settings)
     {
         if (string.IsNullOrWhiteSpace(settings.SmtpHost))

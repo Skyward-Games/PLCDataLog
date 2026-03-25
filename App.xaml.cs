@@ -62,11 +62,11 @@ namespace PLCDataLog
             SetBrush(resources, "TextPrimary", "#1B1B1B");
             SetBrush(resources, "TextSecondary", "#5E5E5E");
             SetBrush(resources, "BorderSoft", "#1F000000");
-            SetBrush(resources, "FocusStroke", "#0F6CBD");
+            SetBrush(resources, "FocusStroke", "#005FA3");
 
-            SetBrush(resources, "ButtonPrimaryBackground", "#0F6CBD");
-            SetBrush(resources, "ButtonPrimaryBackgroundHover", "#115EA3");
-            SetBrush(resources, "ButtonPrimaryBackgroundPressed", "#0C3B5E");
+            SetBrush(resources, "ButtonPrimaryBackground", "#005FA3");
+            SetBrush(resources, "ButtonPrimaryBackgroundHover", "#004F89");
+            SetBrush(resources, "ButtonPrimaryBackgroundPressed", "#003B66");
             SetBrush(resources, "ButtonPrimaryForeground", "#FFFFFF");
 
             SetBrush(resources, "ButtonSecondaryBackground", "#F6F6F6");
@@ -87,7 +87,7 @@ namespace PLCDataLog
             SetSystemBrush(resources, System.Windows.SystemColors.WindowTextBrushKey, "#1B1B1B");
             SetSystemBrush(resources, System.Windows.SystemColors.ControlBrushKey, "#F6F6F6");
             SetSystemBrush(resources, System.Windows.SystemColors.ControlTextBrushKey, "#1B1B1B");
-            SetSystemBrush(resources, System.Windows.SystemColors.HighlightBrushKey, "#0F6CBD");
+            SetSystemBrush(resources, System.Windows.SystemColors.HighlightBrushKey, "#005FA3");
             SetSystemBrush(resources, System.Windows.SystemColors.HighlightTextBrushKey, "#FFFFFF");
 
             SetShadow(resources, 0.08);
@@ -103,9 +103,9 @@ namespace PLCDataLog
             SetBrush(resources, "BorderSoft", "#40FFFFFF");
             SetBrush(resources, "FocusStroke", "#4CC2FF");
 
-            SetBrush(resources, "ButtonPrimaryBackground", "#0F6CBD");
-            SetBrush(resources, "ButtonPrimaryBackgroundHover", "#2886DE");
-            SetBrush(resources, "ButtonPrimaryBackgroundPressed", "#09528F");
+            SetBrush(resources, "ButtonPrimaryBackground", "#005FA3");
+            SetBrush(resources, "ButtonPrimaryBackgroundHover", "#2078C2");
+            SetBrush(resources, "ButtonPrimaryBackgroundPressed", "#00497D");
             SetBrush(resources, "ButtonPrimaryForeground", "#FFFFFF");
 
             SetBrush(resources, "ButtonSecondaryBackground", "#333333");
@@ -126,7 +126,7 @@ namespace PLCDataLog
             SetSystemBrush(resources, System.Windows.SystemColors.WindowTextBrushKey, "#F3F3F3");
             SetSystemBrush(resources, System.Windows.SystemColors.ControlBrushKey, "#333333");
             SetSystemBrush(resources, System.Windows.SystemColors.ControlTextBrushKey, "#F3F3F3");
-            SetSystemBrush(resources, System.Windows.SystemColors.HighlightBrushKey, "#0F6CBD");
+            SetSystemBrush(resources, System.Windows.SystemColors.HighlightBrushKey, "#005FA3");
             SetSystemBrush(resources, System.Windows.SystemColors.HighlightTextBrushKey, "#FFFFFF");
 
             SetShadow(resources, 0.24);
