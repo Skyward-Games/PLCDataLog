@@ -241,6 +241,24 @@
                                 </StackPanel>
 
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,10">
+                                    <Button x:Name="DiscoverPlcsButton" Width="132" Tag="Secondary" Content="Descobrir PLCs" Click="DiscoverPlcsButton_Click" ToolTip="Procura hosts com porta 502 aberta na sub-rede" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,10">
+                                    <TextBlock VerticalAlignment="Center" Foreground="{DynamicResource TextSecondary}" Text="Encontrados" Margin="0,0,8,0" />
+                                    <ComboBox x:Name="DiscoveredPlcsComboBox" Width="220" DisplayMemberPath="Display" SelectionChanged="DiscoveredPlcsComboBox_SelectionChanged" ToolTip="Selecione um host encontrado para preencher o campo IP" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,10">
+                                    <TextBlock VerticalAlignment="Center" Foreground="{DynamicResource TextSecondary}" Text="Filtro" Margin="0,0,8,0" />
+                                    <TextBox x:Name="DiscoveryFilterTextBox" Width="170" Height="32" TextChanged="DiscoveryFilterTextBox_TextChanged" ToolTip="Filtrar por IP, MAC ou fabricante" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,10">
+                                    <TextBlock x:Name="DiscoveredPlcInfoTextBlock" Foreground="{DynamicResource TextSecondary}" Text="MAC/Fabricante: -" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,10">
                                     <TextBlock VerticalAlignment="Center" Foreground="{DynamicResource TextSecondary}" Text="Porta" Margin="0,0,8,0" />
                                     <TextBox x:Name="PlcPortTextBox" Width="80" Text="502" ToolTip="Porta Modbus TCP (padrão 502)" />
                                 </StackPanel>
@@ -250,6 +268,9 @@
 
                                 <Button x:Name="StopButton" Width="124" Tag="Secondary" Margin="0,0,14,10" VerticalAlignment="Center"
                                         Content="{DynamicResource Stop}" Click="StopButton_Click" IsEnabled="False" ToolTip="Parar monitoramento" />
+
+                                <Button x:Name="PauseButton" Width="124" Tag="Secondary" Margin="0,0,14,10" VerticalAlignment="Center"
+                                        Content="Pausar" Click="PauseButton_Click" IsEnabled="False" ToolTip="Pausar/retomar leitura sem desconectar" />
 
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,14,10">
                                     <TextBlock VerticalAlignment="Center" Foreground="{DynamicResource TextSecondary}" Text="{DynamicResource PollMs}" Margin="0,0,8,0" />
@@ -359,6 +380,38 @@
                                                 <DataGridTextColumn Header="{DynamicResource ColLastUpdate}" Binding="{Binding LastUpdate}" Width="180" />
                                             </DataGrid.Columns>
                                         </DataGrid>
+                                    </Border>
+
+                                    <Border Style="{StaticResource Card}" Padding="14" Margin="0,0,0,14">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="180" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <TextBlock Grid.Row="0" Grid.ColumnSpan="3" Text="Diagnóstico rápido de leitura" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,10" />
+
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Tag" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" />
+                                            <ComboBox x:Name="DiagnosticTagComboBox" Grid.Row="1" Grid.Column="1" Height="32" Margin="0,0,10,8" DisplayMemberPath="Name" />
+                                            <Button x:Name="DiagnosticReadButton" Grid.Row="1" Grid.Column="2" Tag="Primary" Height="32" MinWidth="140" Margin="0,0,0,8" Content="Ler agora" Click="DiagnosticReadButton_Click" />
+
+                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Metadados" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Top" Margin="0,2,0,0" />
+                                            <TextBlock x:Name="DiagnosticMetaTextBlock" Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Text="-" TextWrapping="Wrap" Margin="0,0,0,6" />
+
+                                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Raw (HEX)" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Top" Margin="0,2,0,0" />
+                                            <TextBlock x:Name="DiagnosticRawHexTextBlock" Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Text="-" FontFamily="Consolas" TextWrapping="Wrap" Margin="0,0,0,6" />
+
+                                            <TextBlock Grid.Row="4" Grid.Column="0" Text="Decodificado" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Top" Margin="0,2,0,0" />
+                                            <TextBlock x:Name="DiagnosticDecodedTextBlock" Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Text="-" FontFamily="Consolas" TextWrapping="Wrap" />
+                                        </Grid>
                                     </Border>
                                 </StackPanel>
 

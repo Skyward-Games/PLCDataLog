@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Concurrent;
+using System.ComponentModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -10,8 +11,11 @@ using System.Net;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Net.Sockets;
+using System.Net.NetworkInformation;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Threading;
 using FluentModbus;
 using PLCDataLog.Models;
@@ -60,6 +64,11 @@ namespace PLCDataLog
         private FileSystemWatcher? _recipeWatcher;
         private readonly ConcurrentDictionary<string, byte> _recipeCopyInProgress = new(StringComparer.OrdinalIgnoreCase);
         private int? _lastKnownNokCount;
+        private int _diagnosticReadInProgress;
+        private int _discoveryInProgress;
+        private bool _pausePolling;
+        private readonly ObservableCollection<DiscoveredHostInfo> _discoveredHosts = new();
+        private ICollectionView? _discoveredHostsView;
 
         public ObservableCollection<PlcValueRow> Rows { get; } = new();
 
@@ -102,7 +111,7 @@ namespace PLCDataLog
             Rows.Add(new PlcValueRow("D21636", "Total_NOK", PlcValueType.Word, modbusAddress: 21636, registerCount: 1));
             Rows.Add(new PlcValueRow("D21668", "Total_Produzidas", PlcValueType.Word, modbusAddress: 21668, registerCount: 1));
             Rows.Add(new PlcValueRow("D21670", "Quantidade_Meta", PlcValueType.Word, modbusAddress: 21670, registerCount: 1));
-            Rows.Add(new PlcValueRow("D21674", "SKU_Nome_Produto", PlcValueType.Word, modbusAddress: 21674, registerCount: 1));
+            Rows.Add(new PlcValueRow("D21674", "SKU_Nome_Produto", PlcValueType.DWord, modbusAddress: 21673, registerCount: 2));
             Rows.Add(new PlcValueRow("D21700", "Ordem_Producao", PlcValueType.AsciiString, modbusAddress: 21700, registerCount: 16));
             Rows.Add(new PlcValueRow("M167", "Broca_Errada", PlcValueType.Coil, modbusAddress: 2214, registerCount: 1));
             Rows.Add(new PlcValueRow("M168", "Confirma_Erro", PlcValueType.Coil, modbusAddress: 2215, registerCount: 1));
@@ -110,6 +119,7 @@ namespace PLCDataLog
             Rows.Add(new PlcValueRow("M1", "Interromper_IHM", PlcValueType.Coil, modbusAddress: 2048, registerCount: 1));
 
             ValuesGrid.ItemsSource = Rows;
+            InitializeDiagnosticsUi();
 
             InitializeScheduleUi();
             LoadSettingsToUi();
@@ -127,6 +137,249 @@ namespace PLCDataLog
             SetConnectionState(false, "Desconectado", "Aguardando conexão com PLC");
 
             InitializeTrayIcon();
+        }
+
+        private void InitializeDiagnosticsUi()
+        {
+            DiagnosticTagComboBox.ItemsSource = Rows;
+            if (Rows.Count > 0)
+                DiagnosticTagComboBox.SelectedIndex = 0;
+
+            _discoveredHostsView = CollectionViewSource.GetDefaultView(_discoveredHosts);
+            _discoveredHostsView.Filter = obj => MatchesDiscoveryFilter(obj as DiscoveredHostInfo);
+            DiscoveredPlcsComboBox.ItemsSource = _discoveredHostsView;
+        }
+
+        private bool MatchesDiscoveryFilter(DiscoveredHostInfo? host)
+        {
+            if (host is null)
+                return false;
+
+            var filter = (DiscoveryFilterTextBox.Text ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(filter))
+                return true;
+
+            return host.Ip.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                   || host.Mac.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                   || host.Vendor.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                   || host.Display.Contains(filter, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void DiscoveryFilterTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            _discoveredHostsView?.Refresh();
+        }
+
+        private async void DiscoverPlcsButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (Interlocked.Exchange(ref _discoveryInProgress, 1) == 1)
+                return;
+
+            DiscoverPlcsButton.IsEnabled = false;
+            try
+            {
+                StatusTextBlock.Text = "Procurando PLCs na rede (porta 502)...";
+
+                var candidates = BuildSubnetCandidates();
+                if (candidates.Count == 0)
+                {
+                    StatusTextBlock.Text = "Não foi possível determinar sub-rede para varredura.";
+                    return;
+                }
+
+                var found = new ConcurrentBag<DiscoveredHostInfo>();
+                using var gate = new SemaphoreSlim(64);
+
+                var tasks = candidates.Select(async ip =>
+                {
+                    await gate.WaitAsync();
+                    try
+                    {
+                        if (await IsTcpPortOpenAsync(ip, 502, TimeSpan.FromMilliseconds(180)))
+                        {
+                            var mac = TryGetMacAddress(ip, out var resolvedMac) ? resolvedMac : "(indisponível)";
+                            var vendor = ResolveVendorByMac(mac);
+                            found.Add(new DiscoveredHostInfo(ip.ToString(), mac, vendor));
+                        }
+                    }
+                    finally
+                    {
+                        gate.Release();
+                    }
+                }).ToArray();
+
+                await Task.WhenAll(tasks);
+
+                var ordered = found
+                    .GroupBy(x => x.Ip, StringComparer.OrdinalIgnoreCase)
+                    .Select(g => g.First())
+                    .OrderBy(x => x.Ip)
+                    .ToList();
+
+                _discoveredHosts.Clear();
+                foreach (var item in ordered)
+                    _discoveredHosts.Add(item);
+
+                _discoveredHostsView?.Refresh();
+                if (ordered.Count > 0)
+                    DiscoveredPlcsComboBox.SelectedIndex = 0;
+                else
+                    DiscoveredPlcInfoTextBlock.Text = "MAC/Fabricante: -";
+
+                StatusTextBlock.Text = ordered.Count == 0
+                    ? "Nenhum host com porta 502 encontrado nesta sub-rede."
+                    : $"{ordered.Count} host(s) com porta 502 encontrado(s).";
+            }
+            catch (Exception ex)
+            {
+                StatusTextBlock.Text = $"Falha ao descobrir PLCs: {ex.Message}";
+            }
+            finally
+            {
+                DiscoverPlcsButton.IsEnabled = true;
+                Interlocked.Exchange(ref _discoveryInProgress, 0);
+            }
+        }
+
+        private void DiscoveredPlcsComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (DiscoveredPlcsComboBox.SelectedItem is DiscoveredHostInfo selected)
+            {
+                PlcHostTextBox.Text = selected.Ip;
+                DiscoveredPlcInfoTextBlock.Text = $"MAC/Fabricante: {selected.Mac} | {selected.Vendor}";
+            }
+        }
+
+        private List<IPAddress> BuildSubnetCandidates()
+        {
+            if (IPAddress.TryParse((PlcHostTextBox.Text ?? string.Empty).Trim(), out var parsed)
+                && parsed.AddressFamily == AddressFamily.InterNetwork)
+            {
+                return Build24SubnetCandidates(parsed);
+            }
+
+            var localIp = Dns.GetHostAddresses(Dns.GetHostName())
+                .FirstOrDefault(a => a.AddressFamily == AddressFamily.InterNetwork
+                                     && !IPAddress.IsLoopback(a));
+
+            return localIp is null ? new List<IPAddress>() : Build24SubnetCandidates(localIp);
+        }
+
+        private static List<IPAddress> Build24SubnetCandidates(IPAddress baseIp)
+        {
+            var bytes = baseIp.GetAddressBytes();
+            var list = new List<IPAddress>(254);
+            for (var i = 1; i <= 254; i++)
+                list.Add(new IPAddress(new byte[] { bytes[0], bytes[1], bytes[2], (byte)i }));
+
+            return list;
+        }
+
+        private static async Task<bool> IsTcpPortOpenAsync(IPAddress ip, int port, TimeSpan timeout)
+        {
+            using var client = new TcpClient();
+            try
+            {
+                var connectTask = client.ConnectAsync(ip, port);
+                var completed = await Task.WhenAny(connectTask, Task.Delay(timeout));
+                if (completed != connectTask)
+                    return false;
+
+                await connectTask;
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private async void DiagnosticReadButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (Interlocked.Exchange(ref _diagnosticReadInProgress, 1) == 1)
+                    return;
+
+                if (DiagnosticTagComboBox.SelectedItem is not PlcValueRow row)
+                    return;
+
+                if (_pollTask is not null && !_pausePolling)
+                {
+                    DiagnosticMetaTextBlock.Text = $"{row.Address} | {row.Name} | Tipo={row.ValueType} | Modbus={row.ModbusAddress} | Qtd={row.RegisterCount}";
+                    DiagnosticRawHexTextBlock.Text = "(indisponível durante polling ativo)";
+                    DiagnosticDecodedTextBlock.Text = $"Valor atual em tela: {row.Value ?? string.Empty}{Environment.NewLine}Para leitura RAW, use Pausar (ou Stop) e depois Ler agora.";
+                    StatusTextBlock.Text = "Polling ativo: diagnóstico RAW bloqueado para evitar queda de conexão. Use Pausar.";
+                    return;
+                }
+
+                var host = (PlcHostTextBox.Text ?? string.Empty).Trim();
+                if (string.IsNullOrWhiteSpace(host))
+                {
+                    StatusTextBlock.Text = "Informe o IP/host do PLC.";
+                    return;
+                }
+
+                if (!int.TryParse(PlcPortTextBox.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var plcPort) || plcPort is <= 0 or > 65535)
+                {
+                    StatusTextBlock.Text = "Porta do PLC inválida.";
+                    return;
+                }
+
+                if (!byte.TryParse(UnitIdTextBox.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var unitId))
+                {
+                    StatusTextBlock.Text = (string)FindResource("InvalidUnitId");
+                    return;
+                }
+
+                DiagnosticReadButton.IsEnabled = false;
+
+                var result = await Task.Run(() =>
+                {
+                    try
+                    {
+                        using var client = new ModbusTcpClient();
+                        client.Connect(ResolveEndpoint(host, plcPort), ModbusEndianness.BigEndian);
+
+                        var raw = ReadRawForRow(client, row, unitId);
+                        var hex = raw.Length == 0 ? "(vazio)" : string.Join(" ", raw.Select(b => b.ToString("X2", CultureInfo.InvariantCulture)));
+                        var decoded = BuildDiagnosticDecodedText(row, raw);
+                        var operational = DecodeOperationalValue(row, raw);
+
+                        return (ok: true, hex, decoded, operational, error: string.Empty);
+                    }
+                    catch (Exception ex)
+                    {
+                        return (ok: false, hex: string.Empty, decoded: string.Empty, operational: string.Empty, error: ex.Message);
+                    }
+                });
+
+                if (result.ok)
+                {
+                    DiagnosticMetaTextBlock.Text = $"{row.Address} | {row.Name} | Tipo={row.ValueType} | Modbus={row.ModbusAddress} | Qtd={row.RegisterCount}";
+                    DiagnosticRawHexTextBlock.Text = result.hex;
+                    DiagnosticDecodedTextBlock.Text = $"Operacional: {result.operational}{Environment.NewLine}{result.decoded}";
+                    StatusTextBlock.Text = $"Diagnóstico OK para {row.Name}.";
+                }
+                else
+                {
+                    DiagnosticMetaTextBlock.Text = $"{row.Address} | {row.Name} | Tipo={row.ValueType} | Modbus={row.ModbusAddress} | Qtd={row.RegisterCount}";
+                    DiagnosticRawHexTextBlock.Text = "(sem leitura)";
+                    DiagnosticDecodedTextBlock.Text = $"Falha: {result.error}";
+                    StatusTextBlock.Text = $"Falha no diagnóstico: {result.error}";
+                    AutomationLog.Error($"Diagnóstico falhou para '{row.Name}' ({row.Address}): {result.error}");
+                }
+            }
+            catch (Exception ex)
+            {
+                AutomationLog.Error(ex, "Falha inesperada em DiagnosticReadButton_Click");
+                StatusTextBlock.Text = $"Falha inesperada no diagnóstico: {ex.Message}";
+            }
+            finally
+            {
+                DiagnosticReadButton.IsEnabled = true;
+                Interlocked.Exchange(ref _diagnosticReadInProgress, 0);
+            }
         }
 
         private void RegisterUiAuditLogging()
@@ -1122,18 +1375,44 @@ namespace PLCDataLog
                 return;
             }
 
+            var connectDialog = new SendProgressDialog("Conectando ao PLC...")
+            {
+                Owner = this,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            };
+
+            try
+            {
+                connectDialog.Show();
+                var endpoint = ResolveEndpoint(host, plcPort);
+                var isReachable = await IsTcpPortOpenAsync(endpoint.Address, endpoint.Port, TimeSpan.FromSeconds(3));
+                if (!isReachable)
+                {
+                    StatusTextBlock.Text = $"PLC não respondeu em {host}:{plcPort}. Verifique rede/IP.";
+                    return;
+                }
+            }
+            finally
+            {
+                try { connectDialog.Close(); } catch { }
+            }
+
             SaveUiToSettings();
 
             _previousValues.Clear();
             _lastKnownNokCount = null;
+            _pausePolling = false;
+            PauseButton.Content = "Pausar";
 
             StartButton.IsEnabled = false;
             StopButton.IsEnabled = true;
+            PauseButton.IsEnabled = false;
             StatusTextBlock.Text = (string)FindResource("Starting");
             SetConnectionState(false, "Conectando...", $"Tentando {host}:{plcPort} | UnitId {unitId}");
 
             _cts = new CancellationTokenSource();
             _pollTask = PollLoopAsync(host, plcPort, unitId, TimeSpan.FromMilliseconds(pollMs), _cts.Token);
+            PauseButton.IsEnabled = true;
 
             try
             {
@@ -1154,6 +1433,9 @@ namespace PLCDataLog
                 _cts = null;
                 StartButton.IsEnabled = true;
                 StopButton.IsEnabled = false;
+                PauseButton.IsEnabled = false;
+                PauseButton.Content = "Pausar";
+                _pausePolling = false;
                 SetConnectionState(false, "Desconectado", $"Último endpoint: {host}:{plcPort} | UnitId {unitId}");
             }
         }
@@ -1161,8 +1443,22 @@ namespace PLCDataLog
         private void StopButton_Click(object sender, RoutedEventArgs e)
         {
             AutomationLog.Ui("PLC", "Stop requested");
+            _pausePolling = false;
+            PauseButton.Content = "Pausar";
             SetConnectionState(false, "Desconectando...", "Solicitando parada do polling");
             _cts?.Cancel();
+        }
+
+        private void PauseButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_pollTask is null)
+                return;
+
+            _pausePolling = !_pausePolling;
+            PauseButton.Content = _pausePolling ? "Retomar" : "Pausar";
+            StatusTextBlock.Text = _pausePolling
+                ? "Leitura pausada. Conexão mantida para diagnóstico."
+                : "Leitura retomada.";
         }
 
         private async Task PollLoopAsync(string host, int port, byte unitId, TimeSpan interval, CancellationToken ct)
@@ -1178,9 +1474,23 @@ namespace PLCDataLog
 
                     reconnectAttempt = 0;
                     SetConnectionState(true, "Conectado", $"{host}:{port} | UnitId {unitId}");
+                    var pauseNoticeShown = false;
 
                     while (!ct.IsCancellationRequested)
                     {
+                        if (_pausePolling)
+                        {
+                            if (!pauseNoticeShown)
+                            {
+                                pauseNoticeShown = true;
+                                Dispatcher.Invoke(() => StatusTextBlock.Text = "Leitura pausada. Clique Retomar para continuar.");
+                            }
+
+                            await Task.Delay(interval, ct);
+                            continue;
+                        }
+
+                        pauseNoticeShown = false;
                         var changed = PollOnceAndLog(client, unitId, ct);
                         Dispatcher.Invoke(() => StatusTextBlock.Text = string.Format((string)FindResource("PollingLastOk"), DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture))
                                               + (changed.Count > 0 ? $" | Changes: {string.Join(",", changed)}" : string.Empty));
@@ -1434,8 +1744,8 @@ namespace PLCDataLog
                 ConnectionStatusTextBlock.Text = title;
                 ConnectionInfoTextBlock.Text = details;
 
-                DataContentPanel.Visibility = connected ? Visibility.Visible : Visibility.Collapsed;
-                DataLockedPanel.Visibility = connected ? Visibility.Collapsed : Visibility.Visible;
+                DataContentPanel.Visibility = Visibility.Visible;
+                DataLockedPanel.Visibility = Visibility.Collapsed;
 
                 StatusIndicator.Fill = connected ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x10, 0xB9, 0x81)) : System.Windows.Media.Brushes.Gray;
 
@@ -1443,6 +1753,7 @@ namespace PLCDataLog
                 PlcPortTextBox.IsEnabled = !connected;
                 PollIntervalTextBox.IsEnabled = !connected;
                 UnitIdTextBox.IsEnabled = !connected;
+                PauseButton.IsEnabled = _pollTask is not null;
             });
         }
 
@@ -1852,36 +2163,123 @@ namespace PLCDataLog
             return new IPEndPoint(selected, port);
         }
 
-        private void PollOnce(ModbusTcpClient client, byte unitId, CancellationToken ct)
+        private static bool TryGetMacAddress(IPAddress ip, out string macAddress)
         {
-            static ushort ReadU16BE(ReadOnlySpan<byte> buffer, int offset)
-                => (ushort)((buffer[offset] << 8) | buffer[offset + 1]);
+            macAddress = "(indisponível)";
 
-            static uint ReadU32BE(ReadOnlySpan<byte> buffer, int offset)
-                => (uint)((buffer[offset] << 24) | (buffer[offset + 1] << 16) | (buffer[offset + 2] << 8) | buffer[offset + 3]);
-
-            static string ReadAsciiSwappedByRegister(ReadOnlySpan<byte> buffer)
+            try
             {
-                if (buffer.Length == 0)
-                    return string.Empty;
+                if (ip.AddressFamily != AddressFamily.InterNetwork)
+                    return false;
 
-                var normalized = new byte[buffer.Length];
-                for (var i = 0; i < buffer.Length; i += 2)
+                _ = new Ping().Send(ip, 150);
+
+                var macAddr = new byte[6];
+                var len = macAddr.Length;
+                var ipBytes = ip.GetAddressBytes();
+                var dest = BitConverter.ToInt32(ipBytes, 0);
+
+                var result = SendARP(dest, 0, macAddr, ref len);
+                if (result != 0 || len <= 0)
+                    return false;
+
+                macAddress = string.Join(":", macAddr.Take(len).Select(b => b.ToString("X2", CultureInfo.InvariantCulture)));
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static string ResolveVendorByMac(string mac)
+        {
+            if (string.IsNullOrWhiteSpace(mac) || mac.StartsWith("(", StringComparison.Ordinal))
+                return "Desconhecido";
+
+            var normalized = mac.Replace("-", string.Empty).Replace(":", string.Empty).ToUpperInvariant();
+            if (normalized.Length < 6)
+                return "Desconhecido";
+
+            var oui = normalized.Substring(0, 6);
+
+            return oui switch
+            {
+                "001D9C" or "0080F0" or "00E04C" or "603A7C" => "Delta Electronics",
+                _ => "Desconhecido",
+            };
+        }
+
+        private static ushort ReadU16BE(ReadOnlySpan<byte> buffer, int offset)
+            => (ushort)((buffer[offset] << 8) | buffer[offset + 1]);
+
+        private static ushort ReadU16LE(ReadOnlySpan<byte> buffer, int offset)
+            => (ushort)(buffer[offset] | (buffer[offset + 1] << 8));
+
+        private static uint ReadU32BE(ReadOnlySpan<byte> buffer, int offset)
+            => (uint)((buffer[offset] << 24) | (buffer[offset + 1] << 16) | (buffer[offset + 2] << 8) | buffer[offset + 3]);
+
+        private static uint ReadU32LE(ReadOnlySpan<byte> buffer, int offset)
+            => (uint)(buffer[offset] | (buffer[offset + 1] << 8) | (buffer[offset + 2] << 16) | (buffer[offset + 3] << 24));
+
+        private static string ReadAsciiSwappedByRegister(ReadOnlySpan<byte> buffer)
+        {
+            if (buffer.Length == 0)
+                return string.Empty;
+
+            var normalized = new byte[buffer.Length];
+            for (var i = 0; i < buffer.Length; i += 2)
+            {
+                if (i + 1 < buffer.Length)
                 {
-                    if (i + 1 < buffer.Length)
-                    {
-                        normalized[i] = buffer[i + 1];
-                        normalized[i + 1] = buffer[i];
-                    }
-                    else
-                    {
-                        normalized[i] = buffer[i];
-                    }
+                    normalized[i] = buffer[i + 1];
+                    normalized[i + 1] = buffer[i];
                 }
-
-                return Encoding.ASCII.GetString(normalized).TrimEnd('\0', ' ');
+                else
+                {
+                    normalized[i] = buffer[i];
+                }
             }
 
+            return Encoding.ASCII.GetString(normalized).TrimEnd('\0', ' ');
+        }
+
+        private static byte[] ReadRawForRow(ModbusTcpClient client, PlcValueRow row, byte unitId)
+        {
+            if (row.ValueType == PlcValueType.Coil)
+                return client.ReadCoils(unitId, row.ModbusAddress, row.RegisterCount).ToArray();
+
+            return client.ReadHoldingRegisters(unitId, (ushort)row.ModbusAddress, (ushort)row.RegisterCount).ToArray();
+        }
+
+        private static string DecodeOperationalValue(PlcValueRow row, ReadOnlySpan<byte> raw)
+        {
+            return row.ValueType switch
+            {
+                PlcValueType.Coil => raw.Length > 0 && raw[0] != 0 ? "1" : "0",
+                PlcValueType.AsciiString => ReadAsciiSwappedByRegister(raw),
+                PlcValueType.DWord => raw.Length >= 4 ? ReadU32BE(raw, 0).ToString(CultureInfo.InvariantCulture) : string.Empty,
+                _ => raw.Length >= 2 ? ReadU16BE(raw, 0).ToString(CultureInfo.InvariantCulture) : string.Empty,
+            };
+        }
+
+        private static string BuildDiagnosticDecodedText(PlcValueRow row, ReadOnlySpan<byte> raw)
+        {
+            return row.ValueType switch
+            {
+                PlcValueType.Coil => $"Coil bruto={string.Join(",", raw.ToArray())} | Interpretado={(raw.Length > 0 && raw[0] != 0 ? "ON" : "OFF")}",
+                PlcValueType.AsciiString => $"ASCII swap-por-word='{ReadAsciiSwappedByRegister(raw)}' | ASCII direto='{Encoding.ASCII.GetString(raw.ToArray()).TrimEnd('\0', ' ')}'",
+                PlcValueType.DWord => raw.Length >= 4
+                    ? $"UInt32 BE={ReadU32BE(raw, 0)} | UInt32 LE={ReadU32LE(raw, 0)}"
+                    : "Dados insuficientes para DWord",
+                _ => raw.Length >= 2
+                    ? $"UInt16 BE={ReadU16BE(raw, 0)} | UInt16 LE={ReadU16LE(raw, 0)}"
+                    : "Dados insuficientes para Word",
+            };
+        }
+
+        private void PollOnce(ModbusTcpClient client, byte unitId, CancellationToken ct)
+        {
             ct.ThrowIfCancellationRequested();
 
             PlcValueRow[] rows = Array.Empty<PlcValueRow>();
@@ -1899,41 +2297,22 @@ namespace PLCDataLog
                 var row = rows[i];
                 string value;
 
-                switch (row.ValueType)
+                try
                 {
-                    case PlcValueType.Coil:
-                    {
-                        var raw = client.ReadCoils(unitId, row.ModbusAddress, row.RegisterCount);
-                        var isOn = raw.Length > 0 && raw[0] != 0;
-                        value = isOn ? "1" : "0";
-                        break;
-                    }
+                    var raw = ReadRawForRow(client, row, unitId);
+                    value = DecodeOperationalValue(row, raw);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    var msg = ex.Message;
+                    if (msg.Length > 42)
+                        msg = msg.Substring(0, 42) + "...";
 
-                    case PlcValueType.AsciiString:
-                    {
-                        var raw = client.ReadHoldingRegisters(unitId, (ushort)row.ModbusAddress, (ushort)row.RegisterCount);
-                        value = ReadAsciiSwappedByRegister(raw);
-                        break;
-                    }
-
-                    case PlcValueType.DWord:
-                    {
-                        var raw = client.ReadHoldingRegisters(unitId, (ushort)row.ModbusAddress, (ushort)row.RegisterCount);
-                        value = raw.Length >= 4
-                            ? ReadU32BE(raw, 0).ToString(CultureInfo.InvariantCulture)
-                            : string.Empty;
-                        break;
-                    }
-
-                    case PlcValueType.Word:
-                    default:
-                    {
-                        var raw = client.ReadHoldingRegisters(unitId, (ushort)row.ModbusAddress, (ushort)row.RegisterCount);
-                        value = raw.Length >= 2
-                            ? ReadU16BE(raw, 0).ToString(CultureInfo.InvariantCulture)
-                            : string.Empty;
-                        break;
-                    }
+                    value = $"ERR({msg})";
                 }
 
                 updates[i] = (row, value, lastUpdate);
@@ -2072,6 +2451,14 @@ namespace PLCDataLog
                 Source = sender,
             };
             DashboardPanel.RaiseEvent(ev);
+        }
+
+        [System.Runtime.InteropServices.DllImport("iphlpapi.dll", ExactSpelling = true)]
+        private static extern int SendARP(int destIp, int srcIp, byte[] macAddr, ref int physicalAddrLen);
+
+        private sealed record DiscoveredHostInfo(string Ip, string Mac, string Vendor)
+        {
+            public string Display => $"{Ip} [{Vendor}]";
         }
     }
 }

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Globalization;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
@@ -17,6 +18,10 @@ namespace PLCDataLog
         {
             base.OnStartup(e);
 
+            DispatcherUnhandledException += App_DispatcherUnhandledException;
+            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+            TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
+
             try
             {
                 var settings = new SettingsService(SettingsService.GetDefaultSettingsPath()).Load();
@@ -26,6 +31,40 @@ namespace PLCDataLog
             {
                 ApplyThemeMode("System");
             }
+        }
+
+        private static void App_DispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
+        {
+            try
+            {
+                AutomationLog.Error(e.Exception, "Exceção não tratada na UI");
+            }
+            catch
+            {
+            }
+
+            e.Handled = true;
+        }
+
+        private static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
+        {
+            if (e.ExceptionObject is Exception ex)
+                AutomationLog.Error(ex, "Exceção não tratada no AppDomain");
+            else
+                AutomationLog.Error($"Exceção não tratada no AppDomain: {e.ExceptionObject}");
+        }
+
+        private static void TaskScheduler_UnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
+        {
+            try
+            {
+                AutomationLog.Error(e.Exception, "Exceção não observada em Task");
+            }
+            catch
+            {
+            }
+
+            e.SetObserved();
         }
 
         public static void ApplyThemeMode(string? mode)
