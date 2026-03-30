@@ -111,12 +111,12 @@ namespace PLCDataLog
             Rows.Add(new PlcValueRow("D21636", "Total_NOK", PlcValueType.Word, modbusAddress: 21636, registerCount: 1));
             Rows.Add(new PlcValueRow("D21668", "Total_Produzidas", PlcValueType.Word, modbusAddress: 21668, registerCount: 1));
             Rows.Add(new PlcValueRow("D21670", "Quantidade_Meta", PlcValueType.Word, modbusAddress: 21670, registerCount: 1));
-            Rows.Add(new PlcValueRow("D21674", "SKU_Nome_Produto", PlcValueType.DWord, modbusAddress: 21673, registerCount: 2));
+            Rows.Add(new PlcValueRow("D21674", "SKU_Nome_Produto", PlcValueType.DWord, modbusAddress: 21674, registerCount: 2));
             Rows.Add(new PlcValueRow("D21700", "Ordem_Producao", PlcValueType.AsciiString, modbusAddress: 21700, registerCount: 16));
-            Rows.Add(new PlcValueRow("M167", "Broca_Errada", PlcValueType.Coil, modbusAddress: 2214, registerCount: 1));
-            Rows.Add(new PlcValueRow("M168", "Confirma_Erro", PlcValueType.Coil, modbusAddress: 2215, registerCount: 1));
-            Rows.Add(new PlcValueRow("M0", "Iniciar_IHM", PlcValueType.Coil, modbusAddress: 2047, registerCount: 1));
-            Rows.Add(new PlcValueRow("M1", "Interromper_IHM", PlcValueType.Coil, modbusAddress: 2048, registerCount: 1));
+            Rows.Add(new PlcValueRow("M167", "Broca_Errada", PlcValueType.Coil, modbusAddress: 167, registerCount: 1));
+            Rows.Add(new PlcValueRow("M168", "Confirma_Erro", PlcValueType.Coil, modbusAddress: 168, registerCount: 1));
+            Rows.Add(new PlcValueRow("M0", "Iniciar_IHM", PlcValueType.Coil, modbusAddress: 0, registerCount: 1));
+            Rows.Add(new PlcValueRow("M1", "Interromper_IHM", PlcValueType.Coil, modbusAddress: 1, registerCount: 1));
 
             ValuesGrid.ItemsSource = Rows;
             InitializeDiagnosticsUi();
@@ -2222,6 +2222,9 @@ namespace PLCDataLog
         private static uint ReadU32LE(ReadOnlySpan<byte> buffer, int offset)
             => (uint)(buffer[offset] | (buffer[offset + 1] << 8) | (buffer[offset + 2] << 16) | (buffer[offset + 3] << 24));
 
+        private static uint ReadU32WordSwap(ReadOnlySpan<byte> buffer, int offset)
+            => (uint)((buffer[offset + 2] << 24) | (buffer[offset + 3] << 16) | (buffer[offset] << 8) | buffer[offset + 1]);
+
         private static string ReadAsciiSwappedByRegister(ReadOnlySpan<byte> buffer)
         {
             if (buffer.Length == 0)
@@ -2244,10 +2247,84 @@ namespace PLCDataLog
             return Encoding.ASCII.GetString(normalized).TrimEnd('\0', ' ');
         }
 
+        private static int? TryGetCoilIndex(PlcValueRow row)
+        {
+            var address = (row.Address ?? string.Empty).Trim();
+            if (address.Length < 2)
+                return null;
+
+            if (char.ToUpperInvariant(address[0]) != 'M')
+                return null;
+
+            return int.TryParse(address.Substring(1), NumberStyles.Integer, CultureInfo.InvariantCulture, out var index)
+                ? index
+                : null;
+        }
+
+        private static IEnumerable<ushort> BuildCoilCandidates(PlcValueRow row)
+        {
+            var ordered = new List<ushort>(7);
+            var seen = new HashSet<ushort>();
+
+            static void AddCandidate(ICollection<ushort> orderedCandidates, ISet<ushort> seenCandidates, int value)
+            {
+                if (value < 0 || value > ushort.MaxValue)
+                    return;
+
+                var cast = (ushort)value;
+                if (!seenCandidates.Add(cast))
+                    return;
+
+                orderedCandidates.Add(cast);
+            }
+
+            AddCandidate(ordered, seen, row.ModbusAddress);
+            AddCandidate(ordered, seen, row.ModbusAddress + 1);
+            AddCandidate(ordered, seen, row.ModbusAddress - 1);
+
+            var index = TryGetCoilIndex(row);
+            if (index is not null)
+            {
+                // Delta AS (conforme parametrização solicitada): Mx lido em x.
+                AddCandidate(ordered, seen, index.Value);
+
+                // Fallback one-based em alguns bridges/documentações.
+                AddCandidate(ordered, seen, index.Value + 1);
+                AddCandidate(ordered, seen, index.Value - 1);
+
+                // Fallback legado (offset 2048), para manter robustez em ambientes mistos.
+                AddCandidate(ordered, seen, 2048 + index.Value);
+            }
+
+            return ordered;
+        }
+
+        private static byte[] ReadCoilWithFallback(ModbusTcpClient client, PlcValueRow row, byte unitId)
+        {
+            foreach (var candidate in BuildCoilCandidates(row))
+            {
+                try
+                {
+                    var raw = client.ReadCoils(unitId, candidate, 1).ToArray();
+                    if (raw.Length == 0)
+                        continue;
+
+                    var value = (raw[0] & 0x01) != 0;
+                    return new byte[] { value ? (byte)1 : (byte)0 };
+                }
+                catch
+                {
+                    // tenta próximo candidato
+                }
+            }
+
+            return new byte[] { 0 };
+        }
+
         private static byte[] ReadRawForRow(ModbusTcpClient client, PlcValueRow row, byte unitId)
         {
             if (row.ValueType == PlcValueType.Coil)
-                return client.ReadCoils(unitId, row.ModbusAddress, row.RegisterCount).ToArray();
+                return ReadCoilWithFallback(client, row, unitId);
 
             return client.ReadHoldingRegisters(unitId, (ushort)row.ModbusAddress, (ushort)row.RegisterCount).ToArray();
         }
@@ -2258,7 +2335,7 @@ namespace PLCDataLog
             {
                 PlcValueType.Coil => raw.Length > 0 && raw[0] != 0 ? "1" : "0",
                 PlcValueType.AsciiString => ReadAsciiSwappedByRegister(raw),
-                PlcValueType.DWord => raw.Length >= 4 ? ReadU32BE(raw, 0).ToString(CultureInfo.InvariantCulture) : string.Empty,
+                PlcValueType.DWord => raw.Length >= 4 ? ReadU32WordSwap(raw, 0).ToString(CultureInfo.InvariantCulture) : string.Empty,
                 _ => raw.Length >= 2 ? ReadU16BE(raw, 0).ToString(CultureInfo.InvariantCulture) : string.Empty,
             };
         }
@@ -2270,7 +2347,7 @@ namespace PLCDataLog
                 PlcValueType.Coil => $"Coil bruto={string.Join(",", raw.ToArray())} | Interpretado={(raw.Length > 0 && raw[0] != 0 ? "ON" : "OFF")}",
                 PlcValueType.AsciiString => $"ASCII swap-por-word='{ReadAsciiSwappedByRegister(raw)}' | ASCII direto='{Encoding.ASCII.GetString(raw.ToArray()).TrimEnd('\0', ' ')}'",
                 PlcValueType.DWord => raw.Length >= 4
-                    ? $"UInt32 BE={ReadU32BE(raw, 0)} | UInt32 LE={ReadU32LE(raw, 0)}"
+                    ? $"UInt32 WordSwap={ReadU32WordSwap(raw, 0)} | UInt32 BE={ReadU32BE(raw, 0)} | UInt32 LE={ReadU32LE(raw, 0)}"
                     : "Dados insuficientes para DWord",
                 _ => raw.Length >= 2
                     ? $"UInt16 BE={ReadU16BE(raw, 0)} | UInt16 LE={ReadU16LE(raw, 0)}"
